@@ -8,3 +8,4 @@ __pycache__/
 config/local*.json
 runs/
 .cache/
+.venv-hf/

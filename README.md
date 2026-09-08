@@ -28,6 +28,8 @@
 
 ## 快速开始
 
+首次部署请按 [从零部署](docs/从零部署.md) 完成固定模型下载、完整性检查和 PLE 转换。公开模型已包含所需 FP8 PLE 与 BF16 MTP 权重。
+
 ```bash
 git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80.git
 cd Qwen-Flash-SM80
@@ -39,7 +41,7 @@ cd Qwen-Flash-SM80
 2. 构建固定上游版本的镜像：
 
    ```bash
-   docker build -t qwen-flash-sm80:0.1.1 .
+   docker build -t qwen-flash-sm80:0.1.2 .
    ```
 
 3. 复制示例配置，设置模型父目录、模型子目录、PLE 目录和 GPU 标识：
@@ -60,7 +62,7 @@ cd Qwen-Flash-SM80
 停止时使用启动器打印的容器名：
 
 ```bash
-python3 scripts/serve.py stop --name <容器名>
+python3 scripts/serve.py stop --name "<容器名>"
 ```
 
 [完整使用说明、回退与验证范围](docs/使用说明.md) · [源码来源与许可证](docs/来源与许可.md)

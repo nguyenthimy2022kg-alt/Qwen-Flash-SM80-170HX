@@ -1,0 +1,14 @@
+{
+  "repo_id": "RadixArk/Qwen3.8-Flash-Next-NVFP4",
+  "revision": "7b719225242aacd3dbd3f9407468c2ee9a9d2594",
+  "metadata_sha256": {
+    "config.json": "e765305daba0951974308f4d32c075b52a6a45974730d273f2216718a994d624",
+    "model.safetensors.index.json": "da5ca9c3b65e48e151329e64e141c2fa700bf2f99aec53cc014e4b52a6ff7a84"
+  },
+  "indexed_safetensors_files": 206,
+  "indexed_safetensors_bytes": 135195303851,
+  "ple_rows": 320001536,
+  "ple_columns": 160,
+  "ple_dtype": "F8_E4M3",
+  "mtp_tensors": 31
+}
