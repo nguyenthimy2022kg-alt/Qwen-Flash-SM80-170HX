@@ -55,8 +55,8 @@
 首次部署请按 [从零部署](docs/从零部署.md) 完成固定模型下载、完整性检查和 PLE 转换。公开模型已包含所需 FP8 PLE 与 BF16 MTP 权重。
 
 ```bash
-git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80.git
-cd Qwen-Flash-SM80
+git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX.git
+cd Qwen-Flash-SM80-170HX
 ```
 
 需要 Linux、Docker、NVIDIA Container Toolkit、兼容 CUDA 13 的驱动，以及正常工作的 GDS/cuFile 与 GPU P2P。CMP 设备可参考 [P2P 驱动部署](docs/CMP_P2P.md) 和 [NVMe GDS 复现指南](docs/GDS_NVME_P2PDMA_REPRODUCTION.md)。两卡合计显存和 SSD 数据布局必须满足当前模型要求。`allow_compat_mode=false`：GDS 不可用时不会静默退回主机中转。

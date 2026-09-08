@@ -57,8 +57,8 @@ Actual input lengths were 8,193 / 16,385 / 32,769 / 65,537 / 131,073 tokens, inc
 For a new deployment, follow the **[English deployment guide](docs/DEPLOYMENT.en.md)** to download the pinned checkpoint, validate its files, and prepare the PLE data. The public checkpoint already includes FP8 PLE and BF16 MTP weights.
 
 ```bash
-git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80.git
-cd Qwen-Flash-SM80
+git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX.git
+cd Qwen-Flash-SM80-170HX
 ```
 
 Requires Linux, Docker, NVIDIA Container Toolkit, a CUDA 13-compatible driver, working GDS/cuFile, and GPU P2P. The GPU memory capacity and SSD layout must meet this model's requirements. With `allow_compat_mode=false`, GDS failures do not silently fall back to host-memory staging.

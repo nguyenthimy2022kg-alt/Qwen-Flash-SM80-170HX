@@ -17,8 +17,8 @@ Reference driver and filesystem settings are examples, not a requirement to repr
 Run preparation commands from the repository root. The examples place data under `$HOME/qwen-flash-data`; choose a location on a suitable filesystem with sufficient free space.
 
 ```bash
-git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80.git
-cd Qwen-Flash-SM80
+git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX.git
+cd Qwen-Flash-SM80-170HX
 python3 -m venv .venv-hf
 .venv-hf/bin/pip install 'huggingface_hub==1.29.0'
 mkdir -p "$HOME/qwen-flash-data/models"
