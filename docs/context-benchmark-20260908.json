@@ -1,0 +1,68 @@
+{
+  "date": "2026-09-08",
+  "instruction": "写个网站网页",
+  "thinking": {
+    "enabled": true,
+    "preserve_thinking": true,
+    "reasoning_effort": null,
+    "thinking_budget": null
+  },
+  "max_tokens": 50000,
+  "rounds_per_length": 1,
+  "timing": {
+    "prefill": "prompt_tokens / time_to_first_nonempty_output; client-side approximation, not isolated GPU prefill",
+    "decode": "completion_tokens / (last_nonempty_output_time - first_nonempty_output_time); includes reasoning and content"
+  },
+  "results": [
+    {
+      "input_tokens": 8193,
+      "first_output_s": 4.124582528005703,
+      "prefill_proxy_tok_s": 1986.3828507176063,
+      "completion_tokens": 28134,
+      "reasoning_tokens": 4140,
+      "decode_duration_s": 167.1746792999984,
+      "decode_tok_s": 168.29103616530924,
+      "finish_reason": "stop"
+    },
+    {
+      "input_tokens": 16385,
+      "first_output_s": 7.865664222998021,
+      "prefill_proxy_tok_s": 2083.1044315485424,
+      "completion_tokens": 37308,
+      "reasoning_tokens": 9493,
+      "decode_duration_s": 243.857404467999,
+      "decode_tok_s": 152.9910485244087,
+      "finish_reason": "stop"
+    },
+    {
+      "input_tokens": 32769,
+      "first_output_s": 15.839197512999817,
+      "prefill_proxy_tok_s": 2068.8548124426925,
+      "completion_tokens": 27132,
+      "reasoning_tokens": 3916,
+      "decode_duration_s": 173.4334633210019,
+      "decode_tok_s": 156.4403978359259,
+      "finish_reason": "stop"
+    },
+    {
+      "input_tokens": 65537,
+      "first_output_s": 32.185741673994926,
+      "prefill_proxy_tok_s": 2036.212204267825,
+      "completion_tokens": 31032,
+      "reasoning_tokens": 5664,
+      "decode_duration_s": 194.1008214800022,
+      "decode_tok_s": 159.87567576161527,
+      "finish_reason": "stop"
+    },
+    {
+      "input_tokens": 131073,
+      "first_output_s": 63.62975671800086,
+      "prefill_proxy_tok_s": 2059.9324398001263,
+      "completion_tokens": 31143,
+      "reasoning_tokens": 6306,
+      "decode_duration_s": 206.18088707299466,
+      "decode_tok_s": 151.04697841839422,
+      "finish_reason": "stop"
+    }
+  ]
+}
