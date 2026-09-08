@@ -35,7 +35,7 @@ git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80.git
 cd Qwen-Flash-SM80
 ```
 
-需要 Linux、Docker、NVIDIA Container Toolkit、兼容 CUDA 13 的驱动，以及正常工作的 GDS/cuFile 与 GPU P2P。两卡合计显存和 SSD 数据布局必须满足当前模型要求。`allow_compat_mode=false`：GDS 不可用时不会静默退回主机中转。
+需要 Linux、Docker、NVIDIA Container Toolkit、兼容 CUDA 13 的驱动，以及正常工作的 GDS/cuFile 与 GPU P2P。CMP 设备可参考 [P2P 驱动部署](docs/CMP_P2P.md) 和 [NVMe GDS 复现指南](docs/GDS_NVME_P2PDMA_REPRODUCTION.md)。两卡合计显存和 SSD 数据布局必须满足当前模型要求。`allow_compat_mode=false`：GDS 不可用时不会静默退回主机中转。
 
 1. 准备含 MTP 权重的对应 NVFP4 模型，以及 **FP8 PLE 检查点和 GDS 数据**。仓库不包含模型权重。[数据准备说明](docs/使用说明.md#模型与-ple-数据)
 2. 构建固定上游版本的镜像：
