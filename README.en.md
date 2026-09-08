@@ -6,7 +6,7 @@
 
 Combines **GPUDirect Storage (GDS)**, **TEP2**, **MTP6**, and kernels tailored to specific tensor shapes to run the NVFP4 main model on two CMP 170HX GPUs while reading FP8 PLE data directly from SSD.
 
-Recorded single-request long-output result: **170.826 tok/s average decode throughput**, with 29,010 output tokens and a natural stop. The prompt was **“写个网站网页”** (“Build a web page”).
+Completed single-request long-output tests with **8K–128K input: 151.05–168.29 tok/s decode throughput**, all ending naturally. A separate short-prompt run before packaging recorded **170.826 tok/s**. The task instruction was **“写个网站网页”** (“Build a web page”) in all cases.
 
 This runtime targets a specific model, software stack, and two-GPU configuration. Validated hardware: two CMP 170HX GPUs (SM80, approximately 63.39 GiB VRAM each). Other SM80 devices and models have not been validated for compatibility or performance.
 
