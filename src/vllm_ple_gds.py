@@ -9,6 +9,7 @@ so the production path never synchronizes GPU token IDs back to the host.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re

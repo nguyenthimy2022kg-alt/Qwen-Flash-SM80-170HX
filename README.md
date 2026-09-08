@@ -39,7 +39,7 @@ cd Qwen-Flash-SM80
 2. 构建固定上游版本的镜像：
 
    ```bash
-   docker build -t qwen-flash-sm80:0.1.0 .
+   docker build -t qwen-flash-sm80:0.1.1 .
    ```
 
 3. 复制并编辑配置，把模型父目录、模型子目录、PLE 目录和显卡编号换成自己的：
