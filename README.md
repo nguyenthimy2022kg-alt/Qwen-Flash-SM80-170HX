@@ -1,4 +1,4 @@
-# Qwen-Flash-SM80
+# Qwen-Flash-SM80 / CMP 170HX
 
 **简体中文** | [English](README.en.md)
 
