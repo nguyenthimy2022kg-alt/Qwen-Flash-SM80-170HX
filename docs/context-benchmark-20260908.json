@@ -5,7 +5,9 @@
     "enabled": true,
     "preserve_thinking": true,
     "reasoning_effort": null,
-    "thinking_budget": null
+    "thinking_budget": null,
+    "effective_reasoning_effort": "xhigh",
+    "reasoning_effort_source": "chat template default; omitted in request"
   },
   "max_tokens": 50000,
   "rounds_per_length": 1,
