@@ -1,5 +1,5 @@
 {
-  "image": "qwen-flash-sm80:0.1.2",
+  "image": "qwen-flash-sm80:0.1.3",
   "models_root": "/data/models",
   "model_subdir": "Qwen3.8-Flash-Next-NVFP4",
   "ple_artifact": "/data/ple-gds",

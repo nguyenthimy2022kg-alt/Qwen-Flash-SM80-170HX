@@ -7,6 +7,9 @@ LABEL='qwen-flash-sm80.managed'
 
 def read_config(path):
     c=json.loads(path.read_text())
+    for field in ('models_root','model_subdir','ple_artifact','cufile_config','ple_identity','image'):
+        if not isinstance(c.get(field),str) or not c[field].strip():
+            raise ValueError(f'{field} 必须填写非空字符串')
     for field in ('models_root','ple_artifact','cufile_config','ple_identity','validation_dir'):
         if c.get(field):
             p=Path(c[field]).expanduser()
@@ -22,6 +25,20 @@ def read_config(path):
         if c.get(f) and (':' in c[f] or '\n' in c[f]):raise ValueError('挂载路径不能含冒号或换行')
     return c
 
+def check_paths(c):
+    for field,path in [('models_root',Path(c['models_root'])),
+                       ('model_subdir',Path(c['models_root'])/c['model_subdir']),
+                       ('ple_artifact',Path(c['ple_artifact']))]:
+        if not path.is_dir():raise ValueError(f'{field} 必须是已存在的目录：{path}')
+    for field,path in [('PLE CURRENT',Path(c['ple_artifact'])/'CURRENT'),
+                       ('cufile_config',Path(c['cufile_config'])),
+                       ('ple_identity',Path(c['ple_identity']))]:
+        if not path.is_file():raise ValueError(f'{field} 必须是已存在的文件：{path}')
+    if c.get('validation_dir'):
+        for rank in (0,1):
+            path=Path(c['validation_dir'])/f'draft-hidden-rank{rank}.pt'
+            if not path.is_file():raise FileNotFoundError(f'缺少可选验证样本：{path}')
+
 def gpu_inventory():
     output=sp.check_output(['nvidia-smi','--query-gpu=index,uuid,pci.bus_id','--format=csv,noheader,nounits'],text=True)
     result={}
@@ -32,6 +49,8 @@ def gpu_inventory():
     return result
 
 def build_command(c,name,run,devices):
+    for gpu in c['gpu_ids']:
+        if str(gpu) not in devices:raise ValueError(f'未找到所选 GPU：{gpu}，请填写本机显卡编号或完整 UUID')
     selected=[devices[str(x)] for x in c['gpu_ids']]
     if len({x['uuid'] for x in selected})!=2:raise ValueError('所选 GPU 实际为同一设备')
     model='/models/'+c['model_subdir']
@@ -105,13 +124,9 @@ def main():
     if args.action=='_supervise':supervise(args.run);return
     c=read_config(args.config);name=args.name or 'qwen-flash-sm80-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]+',name):raise ValueError('容器名称无效')
+    if not args.dry_run:check_paths(c)
     run=ROOT/'runs'/name;cmd=build_command(c,name,run,gpu_inventory())
     if args.dry_run:print(json.dumps(cmd,ensure_ascii=False,indent=2));return
-    for path in [Path(c['models_root'])/c['model_subdir'],Path(c['ple_artifact'])/'CURRENT',Path(c['cufile_config']),Path(c['ple_identity'])]:
-        if not path.exists():raise FileNotFoundError(path)
-    if c.get('validation_dir'):
-        for rank in (0,1):
-            if not (Path(c['validation_dir'])/f'draft-hidden-rank{rank}.pt').is_file():raise FileNotFoundError('缺少可选验证样本')
     check_offset(c.get('core_offset_guard'))
     if available_gib()<c['min_host_available_gib']:raise RuntimeError('主机可用内存不足')
     if sp.run(['docker','inspect',name],stdout=sp.DEVNULL,stderr=sp.DEVNULL).returncode==0:raise RuntimeError('同名容器已存在，请换名')
