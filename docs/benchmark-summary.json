@@ -1,0 +1,28 @@
+{
+  "date": "2026-09-08",
+  "prompt": "写个网站网页",
+  "temperature": 0,
+  "seed": 0,
+  "max_tokens": 32768,
+  "warmup_tokens": 128,
+  "gpu": "2 x CMP 170HX (SM80)",
+  "parallelism": "TEP2",
+  "mtp_depth": 6,
+  "current": {
+    "decode_tok_s": 170.8259971654979,
+    "completion_tokens": 29010,
+    "reasoning_tokens": 4295,
+    "acceptance": 0.5764561241739665,
+    "prefill_s": 0.2183140019988059,
+    "finish_reason": "stop",
+    "runs": 1
+  },
+  "historical_comparator": {
+    "decode_tok_s": 158.01295155864855,
+    "completion_tokens": 28090,
+    "reasoning_tokens": 5645,
+    "acceptance": 0.5811638183463771,
+    "runs": 1
+  },
+  "comparison_note": "历史一次与本次输出不同；8.1%为观察差异，不保证固定提升。"
+}

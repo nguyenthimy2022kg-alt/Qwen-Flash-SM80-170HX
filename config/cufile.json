@@ -1,0 +1,16 @@
+{
+  "logging": {
+    "level": "ERROR"
+  },
+  "properties": {
+    "use_pci_p2pdma": true,
+    "allow_compat_mode": false,
+    "use_poll_mode": true,
+    "poll_mode_max_size_kb": 4
+  },
+  "block": {
+    "nvme": {
+      "use_pci_p2pdma": true
+    }
+  }
+}

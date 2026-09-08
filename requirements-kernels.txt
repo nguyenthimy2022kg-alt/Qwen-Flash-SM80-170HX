@@ -1,0 +1,2 @@
+tilelang==0.1.14 --hash=sha256:fcc5d47ac1baeb7a8555ff5384af9ce9f3efef46dd926bc23d2c1cd425f68600
+apache-tvm-ffi==0.1.12 --hash=sha256:817af52916ca9987e019ae9c811406835c7f26c590b2a7bcfa9db0e3809f4228 --hash=sha256:dc0acd7eeb0e451d5e3f686af3ba0b495fdbf97b5b54cf9a0f770cdafe0e691a

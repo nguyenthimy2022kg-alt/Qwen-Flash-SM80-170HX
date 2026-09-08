@@ -1,0 +1,12 @@
+Qwen-Flash-SM80
+Copyright 2026 Qwen-Flash-SM80 contributors
+
+Contains modified source from the vLLM project.
+Copyright contributors to the vLLM project.
+SPDX-License-Identifier: Apache-2.0
+
+Includes community PLE integration work originating in qwen3.8-Flash-DGX.
+Copyright 2026 blazux.
+The original license notice is retained in licenses/qwen3.8-Flash-DGX-LICENSE.
+
+CUDA/cuFile, model weights and third-party packages are not relicensed by this project.

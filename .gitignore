@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.so
+*.whl
+*.pt
+*.safetensors
+.env
+config/local*.json
+runs/
+.cache/

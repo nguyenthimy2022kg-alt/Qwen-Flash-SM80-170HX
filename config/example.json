@@ -1,0 +1,20 @@
+{
+  "image": "qwen-flash-sm80:0.1.0",
+  "models_root": "/data/models",
+  "model_subdir": "Qwen3.8-Flash-Next-NVFP4-GDS-FP8-view",
+  "ple_artifact": "/data/ple-gds",
+  "cufile_config": "config/cufile.json",
+  "gpu_ids": [
+    "0",
+    "1"
+  ],
+  "port": 18420,
+  "mode": "tep2",
+  "draft_int8": true,
+  "container_memory_gib": 21,
+  "container_memory_and_swap_gib": 26,
+  "min_host_available_gib": 2,
+  "core_offset_guard": null,
+  "validation_dir": null,
+  "ple_identity": "config/local-ple-identity.json"
+}

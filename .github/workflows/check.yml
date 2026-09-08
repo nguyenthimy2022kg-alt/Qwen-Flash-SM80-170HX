@@ -1,0 +1,15 @@
+name: 源码检查
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  cpu-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python 与 Shell 语法
+        run: |
+          python3 -m compileall -q src scripts
+          bash -n scripts/build-ple-gds-reader.sh
+      - name: 发布接口与数据校验
+        run: python3 -m unittest discover -s tests -v
