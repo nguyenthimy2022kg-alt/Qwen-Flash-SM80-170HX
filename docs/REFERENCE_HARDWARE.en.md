@@ -15,7 +15,7 @@ Software enumeration cannot identify passive risers or extension cables without 
 | Component | Reference configuration |
 |---|---|
 | CPU | One AMD EPYC 7532, 32 cores; the OS reports one NUMA node |
-| Motherboard | SMBIOS reports HUANANZHI H12D-8D V2.0; not checked against the physical board marking |
+| Motherboard | H12D (confirmed); SMBIOS identifies it as HUANANZHI H12D-8D V2.0 |
 | GPUs | Two NVIDIA CMP 170HX, SM80, nominally 64 GB each; see deployment guide for available VRAM |
 | PLE storage | Samsung SSD 990 PRO 4TB, `0000:c4:00.0`, currently `/dev/nvme1n1` |
 | Data filesystem | `/dev/nvme1n1p2`, ext4, mounted with `data=ordered` |

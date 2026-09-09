@@ -15,7 +15,7 @@
 | 部件 | 参考配置 |
 |---|---|
 | CPU | 单路 AMD EPYC 7532，32 核；系统显示一个 NUMA 节点 |
-| 主板 | SMBIOS 报告为 HUANANZHI H12D-8D V2.0；未按实物丝印核对 |
+| 主板 | H12D（已确认）；SMBIOS 详细识别为 HUANANZHI H12D-8D V2.0 |
 | GPU | 两张 NVIDIA CMP 170HX，SM80，每卡标称 64 GB；运行可用容量见部署指南 |
 | PLE 数据盘 | Samsung SSD 990 PRO 4TB，`0000:c4:00.0`，本机为 `/dev/nvme1n1` |
 | 数据文件系统 | `/dev/nvme1n1p2`，ext4，实际挂载含 `data=ordered` |
