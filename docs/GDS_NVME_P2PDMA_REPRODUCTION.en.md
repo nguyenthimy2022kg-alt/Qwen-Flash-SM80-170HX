@@ -5,6 +5,22 @@
 Updated: 2026-09-08  
 Validated environment: CMP 170HX / GA100-class SM80, Ubuntu 24.04, Linux 6.17, NVIDIA 610.43.03, CUDA 13.0 GDS.
 
+## Before you start: what does this guide cover?
+
+**This is a configuration and validation reference for a tested environment, not a standalone installation tutorial. It does not guarantee that copying the steps will enable NVMe GDS on any CMP machine.**
+
+| Current environment | How to use this guide |
+|---|---|
+| Compatible driver, CUDA/cuFile, and GDS tools are available | Review settings against the local topology, then perform strict reads and data validation |
+| CUDA/cuFile or GDS tools are not installed | Install them first; commands below assume `gdscheck.py` and `gdsio` are available |
+| The CMP GPU lacks the required BAR1/P2P capabilities | Complete driver adaptation first; copying parameters or installing public cmpunlocker alone does not reproduce the reference machine |
+
+This guide does not provide step-by-step driver/CUDA/GDS installation or distribute the reference machine's additional CMP driver overlay (local patches). That overlay differs from public cmpunlocker; see the [CMP P2P deployment reference](CMP_P2P.en.md). Machines with native support or another implementation of the required capabilities do not need the same patches.
+
+For initial setup, consult the [CUDA installation guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) and [GDS installation and troubleshooting guide](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html). Select versions compatible with the OS, driver, and intended GDS path. These official guides do not supply the reference machine's additional CMP adaptations. This reference uses CUDA 13.0 GDS; current official documentation may describe a different version.
+
+The host needs the relevant driver and kernel support. The environment running the tests (host or container) needs CUDA/cuFile, `gdscheck.py`, `gdsio`, and access to the target GPU and data files. Tools being present inside a container does not establish host direct-I/O support. Once prepared, proceed with the checks below and validate actual reads and data correctness with CPU compatibility fallback disabled.
+
 This guide adapts the project's original GDS reproduction records. Device UUIDs have been replaced with placeholders, and the examples include configuration backup/restore and writing test data before validating reads. See the [CMP P2P deployment reference](CMP_P2P.en.md) for driver provenance and version details. The system settings below belong to a specific reference environment and must be reviewed for each target machine. The project launcher does not apply them.
 
 The IOMMU, NVMe multipath, ext4, BAR1 settings, and validation checks below apply to this reference path. Other machines need not use identical settings. Choose a configuration appropriate for the hardware and driver and meet the [deployment requirements](DEPLOYMENT.en.md#requirements). Machine-specific patches are not mandatory vLLM dependencies.

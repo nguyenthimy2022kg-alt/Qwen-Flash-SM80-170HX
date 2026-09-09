@@ -5,6 +5,22 @@
 更新时间：2026-09-08  
 验证环境：CMP 170HX/GA100 类 SM80、Ubuntu 24.04、Linux 6.17、NVIDIA 610.43.03、CUDA 13.0 GDS
 
+## 阅读前：这篇文档能完成什么？
+
+**本文是已验证环境的配置与验收参考，不是单篇从零安装教程，也不保证任意 CMP 机器照抄后就能开启 NVMe GDS。**
+
+| 当前环境 | 应如何使用本文 |
+|---|---|
+| 已有兼容驱动、CUDA/cuFile 和 GDS 工具 | 根据本机拓扑核对配置，再按本文做 strict 读取与数据校验 |
+| 尚未安装 CUDA/cuFile 或 GDS 工具 | 先完成相应安装；本文后面的命令默认 `gdscheck.py`、`gdsio` 已可用 |
+| CMP 尚未具备所需的 BAR1/P2P 能力 | 先完成驱动适配；只复制本文参数或安装公开 cmpunlocker，不能保证复现参考机器 |
+
+本文尚未提供逐步的驱动/CUDA/GDS 安装流程，也不分发参考机器额外的 CMP 驱动 overlay（本地补丁）。该补丁与公开 cmpunlocker 不完全相同，具体差异见 [CMP P2P 部署参考](CMP_P2P.md)。已有原生支持或通过其他方式实现相同能力的机器无需使用相同补丁。
+
+从零准备时，可先查阅 [CUDA Linux 安装指南](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) 和 [GDS 安装与排障指南](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html)。按操作系统、驱动和目标 GDS 路径选择匹配版本；这些官方资料不包含本机 CMP 的额外适配，不能代替它。本文记录的是 CUDA 13.0 GDS 参考环境，官方当前版本可能不同。
+
+主机须具备相应的驱动和内核支持；执行测试的环境（主机或容器）须能使用 CUDA/cuFile、`gdscheck.py` 和 `gdsio`，并访问目标 GPU 与数据文件。容器内有这些工具，不代表主机已经具备直通能力。完成准备后，从下方前置检查开始，最终以禁止 CPU compatibility fallback 时的实际读入与数据校验结果为准。
+
 本文根据项目原有 GDS 复现记录整理，已替换设备 UUID，并调整配置备份、恢复及先写入测试数据再校验读取的示例。驱动层 P2P 项目与版本说明见 [CMP P2P 部署参考](CMP_P2P.md)。以下系统配置属于特定参考环境，需要按目标机器逐项核对；本项目启动器不会执行这些修改。
 
 本文的 IOMMU、NVMe multipath、ext4 和 BAR1 设置，以及后文的门禁检查，均针对下述参考路径。其他机器不要求逐项相同，应根据自己的硬件与驱动选择配置，并满足 [主机验收条件](从零部署.md#主机验收条件)；机器专用补丁不是 vLLM 部署的必需依赖。
