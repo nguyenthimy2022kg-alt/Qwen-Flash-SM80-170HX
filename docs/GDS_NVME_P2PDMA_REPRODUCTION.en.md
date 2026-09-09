@@ -2,7 +2,7 @@
 
 [简体中文](GDS_NVME_P2PDMA_REPRODUCTION.md) | **English**
 
-Follow “prepare → configure → validate 64 MiB” to verify direct SSD-to-GPU reads. The reference host is **H12D, two CMP 170HX GPUs, Samsung 990 PRO, Ubuntu 24.04 / Linux 6.17 / NVIDIA 610.43.03**, with CUDA 13.0, GDS 1.15.1.6 and libcufile 2.12.
+Follow “prepare → configure → validate 64 MiB” to verify direct SSD-to-GPU reads. The reference host is **H12D, two CMP 170HX GPUs, Samsung 990 PRO, Ubuntu 24.04.4 / Linux 6.17.0-23-generic / NVIDIA 610.43.03**, with CUDA 13.0, GDS/cuFile packages 1.15.1.6-1.
 
 ```text
 Application schedules reads → cuFile / filesystem / NVMe driver
@@ -11,20 +11,38 @@ Actual payload: SSD → PCIe → GPU VRAM (no staging in CPU RAM)
 
 This uses **NVMe P2PDMA**, without the traditional path's `nvidia-fs` module or custom NVMe patches. GPU-to-GPU P2P and SSD direct reads need separate validation; success with one does not prove the other works.
 
+Direct reads have been validated on the reference host. A fresh GDS deployment using the complete public driver revision has not yet been validated on a second machine. Use the real read checks in section 3 to establish success.
+
 ## 1. Prepare the environment
 
 - **Driver:** for CMP BAR1/P2P adaptation, use the original community project [bayley/cmpunlocker](https://github.com/bayley/cmpunlocker/tree/5a7bb4b7e5056306fe49e8b824787659abb19914#gpu-to-gpu-p2p). It already contains the relevant patches; do not download and apply another copy of those patches. Complete platform configuration using its P2P instructions. Skip this step on a host with working direct-transfer support.
 - **GDS tools:** prepare CUDA/cuFile versions compatible with the host and make `gdscheck.py` and `gdsio` available. If needed, follow [NVIDIA's GDS installation instructions](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html). Commands below use `/usr/local/cuda-13.0/gds/tools`.
 - **Test target:** select the actual NVMe mount containing the model's PLE data and the reading GPU. On the reference machine, the SSD and reading GPU use different root ports on the same CPU, **without a PCIe switch**. Validate other machines directly.
 
+**Set the CMP installer options explicitly**: run `sudo ./install.sh --p2p --no-iommu` from the selected cmpunlocker source directory. `--p2p` compiles in the capability override; `--no-iommu` prevents the installer from switching to `iommu=pt`. Disable any existing IOMMU setting as described in section 2. The installer does not configure static BAR1 automatically; check those settings after installation.
+
+**Tools on Ubuntu 24.04**: configure the matching NVIDIA CUDA APT repository using NVIDIA's installation instructions, then inspect and install the validated packages below. This native path does not require `nvidia-fs`. Review the `-s` installation plan first and confirm that it will not replace the adapted GPU driver.
+
+```bash
+apt-cache policy libcufile-13-0 gds-tools-13-0
+sudo apt-get -s install --no-install-recommends libcufile-13-0=1.15.1.6-1 gds-tools-13-0=1.15.1.6-1
+sudo apt-get install --no-install-recommends libcufile-13-0=1.15.1.6-1 gds-tools-13-0=1.15.1.6-1
+```
+
+If that version is unavailable, resolve the repository setup or validate another version separately; do not substitute a driver metapackage that replaces the adapted CMP driver.
+
 Identify the devices and mounts:
 
 ```bash
 nvidia-smi --query-gpu=index,uuid,name,pci.bus_id,memory.total,driver_version --format=csv
 nvidia-smi topo -m
+nvidia-smi -q -d MEMORY
+grep -E '^CONFIG_(PCI_P2PDMA|ZONE_DEVICE)=' "/boot/config-$(uname -r)"
 lspci -nn | grep -Ei 'NVIDIA|Non-Volatile memory|NVMe'
 lsblk -o NAME,MODEL,TRAN,FSTYPE,MOUNTPOINTS
 ```
+
+The kernel must enable `CONFIG_PCI_P2PDMA=y` and `CONFIG_ZONE_DEVICE=y`; the version number alone is insufficient. Also check the total under `BAR1 Memory Usage` (64 GiB on the reference host). If BAR1 remains small, resolve BIOS/PCIe address allocation or driver resizing first; a forced capability flag cannot replace that.
 
 Replace these three values with local paths and the GPU UUID. `TEST_DIR` must be an existing directory on the intended NVMe, not `/tmp`, tmpfs or another disk:
 

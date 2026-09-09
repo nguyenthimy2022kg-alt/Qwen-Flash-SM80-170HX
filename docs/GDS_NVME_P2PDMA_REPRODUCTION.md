@@ -2,7 +2,7 @@
 
 **简体中文** | [English](GDS_NVME_P2PDMA_REPRODUCTION.en.md)
 
-本文按“准备环境 → 配置 → 64 MiB 数据校验”完成 SSD 直读显存验证。参考机器为 **H12D、双 CMP 170HX、Samsung 990 PRO、Ubuntu 24.04 / Linux 6.17 / NVIDIA 610.43.03**，使用 CUDA 13.0、GDS 1.15.1.6、libcufile 2.12。
+本文按“准备环境 → 配置 → 64 MiB 数据校验”完成 SSD 直读显存验证。参考机器为 **H12D、双 CMP 170HX、Samsung 990 PRO、Ubuntu 24.04.4 / Linux 6.17.0-23-generic / NVIDIA 610.43.03**，使用 CUDA 13.0、GDS/cuFile 软件包 1.15.1.6-1。
 
 ```text
 应用安排读取 → cuFile / 文件系统 / NVMe 驱动
@@ -11,20 +11,38 @@
 
 这里使用 **NVMe P2PDMA** 路径，不需要传统路径的 `nvidia-fs` 模块或定制 NVMe 补丁。双卡 P2P 与 SSD 直读分别验证；前者成功不代表后者已经可用。
 
+已验证的是本机的实际直读；完整公开驱动版本在另一台全新机器上的从零 GDS 部署尚未验证。下面是可复现的配置与验收流程，最终以第 3 节的真实读取结果为准。
+
 ## 1. 准备环境
 
 - **驱动**：CMP 的 BAR1/P2P 适配优先使用原始社区项目 [bayley/cmpunlocker](https://github.com/bayley/cmpunlocker/tree/5a7bb4b7e5056306fe49e8b824787659abb19914#gpu-to-gpu-p2p)。它已包含相关补丁，无需另外下载并叠加同名补丁；按其 P2P 说明完成平台配置。已有直通能力的机器跳过这一步。
 - **GDS 工具**：准备匹配系统的 CUDA/cuFile，确保 `gdscheck.py` 和 `gdsio` 可用。未安装时按 [NVIDIA GDS 安装说明](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html)完成安装。下面统一以 `/usr/local/cuda-13.0/gds/tools` 为例。
 - **测试目标**：选择模型 PLE 数据所在的真实 NVMe 挂载点和读盘 GPU。参考机器 SSD 与读盘卡位于同一 CPU 的不同根端口下，**不经过 PCIe switch**；其他机器需实际校验。
 
+**CMP 安装参数必须明确**：在所选 cmpunlocker 源码目录安装时使用 `sudo ./install.sh --p2p --no-iommu`。`--p2p` 才会编入能力解锁；`--no-iommu` 防止安装器自动改成 `iommu=pt`，已有 IOMMU 仍需按第 2 节关闭。安装器不会替你写好静态 BAR1 参数，安装后仍须检查该节配置。
+
+**Ubuntu 24.04 的工具包**：先按 NVIDIA 安装说明配置对应 CUDA APT 软件源，再查看并安装本机已验证版本。无需为这条原生路径安装 `nvidia-fs`；先用 `-s` 查看安装计划，确认不会替换已适配的显卡驱动。
+
+```bash
+apt-cache policy libcufile-13-0 gds-tools-13-0
+sudo apt-get -s install --no-install-recommends libcufile-13-0=1.15.1.6-1 gds-tools-13-0=1.15.1.6-1
+sudo apt-get install --no-install-recommends libcufile-13-0=1.15.1.6-1 gds-tools-13-0=1.15.1.6-1
+```
+
+若软件源没有该版本，先处理软件源或另行验证可用版本，不要直接安装会替换 CMP 驱动的整套驱动元包。
+
 先查看设备和挂载信息：
 
 ```bash
 nvidia-smi --query-gpu=index,uuid,name,pci.bus_id,memory.total,driver_version --format=csv
 nvidia-smi topo -m
+nvidia-smi -q -d MEMORY
+grep -E '^CONFIG_(PCI_P2PDMA|ZONE_DEVICE)=' "/boot/config-$(uname -r)"
 lspci -nn | grep -Ei 'NVIDIA|Non-Volatile memory|NVMe'
 lsblk -o NAME,MODEL,TRAN,FSTYPE,MOUNTPOINTS
 ```
+
+内核应启用 `CONFIG_PCI_P2PDMA=y`、`CONFIG_ZONE_DEVICE=y`，仅看版本号不够；同时检查 `BAR1 Memory Usage` 的总容量，本机为 64 GiB。若 BAR1 仍很小，先解决 BIOS/PCIe 地址空间分配或驱动扩容，不能靠强制能力标志代替。
 
 将以下三个值替换为本机路径和 GPU UUID；`TEST_DIR` 必须是已存在的 NVMe 数据目录，不能是 `/tmp`、tmpfs 或其他磁盘：
 

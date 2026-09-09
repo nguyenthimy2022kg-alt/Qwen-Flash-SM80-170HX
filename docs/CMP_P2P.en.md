@@ -12,6 +12,8 @@ For CMP 170HX driver adaptation, start with **[bayley/cmpunlocker at pinned revi
 
 Follow that revision's installation instructions with matching NVIDIA driver libraries, firmware, and kernel headers, then install and cold boot. Its installer changes host settings but does not complete P2P/GDS setup for every platform; review BAR1, IOMMU, and related settings for your machine. An existing working driver does not need reinstalling.
 
+Install with `--p2p --no-iommu`: the former enables the P2P capability override; the latter prevents the installer from enabling IOMMU. Check existing IOMMU and static BAR1 settings using the GDS guide. The default installation alone does not enable this path.
+
 ## What each component does
 
 | Component | Role |
