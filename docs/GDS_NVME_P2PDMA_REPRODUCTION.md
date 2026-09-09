@@ -1,5 +1,7 @@
 # CMP 170HX：Samsung 990 PRO → GPU NVMe P2PDMA 复现指南
 
+**简体中文** | [English](GDS_NVME_P2PDMA_REPRODUCTION.en.md)
+
 更新时间：2026-09-08  
 验证环境：CMP 170HX/GA100 类 SM80、Ubuntu 24.04、Linux 6.17、NVIDIA 610.43.03、CUDA 13.0 GDS
 

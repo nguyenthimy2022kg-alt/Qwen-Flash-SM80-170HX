@@ -1,5 +1,7 @@
 # CMP 170HX P2P 部署参考
 
+**简体中文** | [English](CMP_P2P.en.md)
+
 本项目参考环境的 GPU P2P 支持使用 [qg19932GH/cmpunlocker](https://github.com/qg19932GH/cmpunlocker)。该项目运行在驱动层，独立于 vLLM；本仓库不包含其驱动补丁，也不会在镜像构建或服务启动时自动安装。
 
 2026-09-08 核查的上游提交为 [`aaddfd4ce84a2804a7e0cd332acc4c26c79063d9`](https://github.com/qg19932GH/cmpunlocker/tree/aaddfd4ce84a2804a7e0cd332acc4c26c79063d9)。这是文档审查版本，**尚未核实它是否等于参考机器最初安装驱动时使用的提交**。

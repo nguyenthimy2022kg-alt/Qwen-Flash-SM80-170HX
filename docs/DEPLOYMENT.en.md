@@ -10,7 +10,7 @@
 - Model files total approximately 135.2 GB. Converted PLE data adds approximately 51.2 GB. Reserve at least 220 GB for data, plus separate space for Docker layers and compilation caches.
 - Working GPU P2P and strict GDS/cuFile reads on the target NVMe/filesystem/driver/topology. Direct-read data validation must pass; installing GDS alone does not establish that the path works. The supplied configuration disables host-staging fallback with `allow_compat_mode=false`.
 
-Reference driver and filesystem settings are examples, not a requirement to reproduce the same machine. The default cuFile configuration uses NVMe P2PDMA. Other GDS paths require their own configuration and direct-read validation. See the [CMP P2P reference (Chinese)](CMP_P2P.md), [GDS reproduction guide (Chinese)](GDS_NVME_P2PDMA_REPRODUCTION.md), and [NVIDIA GDS documentation](https://docs.nvidia.com/gpudirect-storage/).
+Reference driver and filesystem settings are examples, not a requirement to reproduce the same machine. The default cuFile configuration uses NVMe P2PDMA. Other GDS paths require their own configuration and direct-read validation. See the [CMP P2P reference](CMP_P2P.en.md), [GDS reproduction guide](GDS_NVME_P2PDMA_REPRODUCTION.en.md), and [NVIDIA GDS documentation](https://docs.nvidia.com/gpudirect-storage/).
 
 ## 1. Download the pinned model
 

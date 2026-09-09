@@ -63,7 +63,7 @@ cd Qwen-Flash-SM80-170HX
 
 Requires Linux, Docker, NVIDIA Container Toolkit, a CUDA 13-compatible driver, working GDS/cuFile, and GPU P2P. The GPU memory capacity and SSD layout must meet this model's requirements. With `allow_compat_mode=false`, GDS failures do not silently fall back to host-memory staging.
 
-**Validate capabilities on the target host.** The reference driver's patches and IOMMU/filesystem settings are examples, not mandatory settings to copy. The required outcomes are working two-GPU P2P and validated strict cuFile direct reads, alongside the specified hardware, model format, and software stack. CMP reference documents: [P2P setup (Chinese)](docs/CMP_P2P.md) · [NVMe GDS reproduction guide (Chinese)](docs/GDS_NVME_P2PDMA_REPRODUCTION.md).
+**Validate capabilities on the target host.** The reference driver's patches and IOMMU/filesystem settings are examples, not mandatory settings to copy. The required outcomes are working two-GPU P2P and validated strict cuFile direct reads, alongside the specified hardware, model format, and software stack. CMP reference documents: [P2P setup](docs/CMP_P2P.en.md) · [NVMe GDS reproduction guide](docs/GDS_NVME_P2PDMA_REPRODUCTION.en.md).
 
 Once the model and PLE data are prepared:
 
@@ -103,7 +103,7 @@ python3 scripts/serve.py stop --name "<container-name>"
 - `src/preload/`: approximately 17 MB of preloaded Triton kernels and SHA256 manifests for this fixed SM80 environment; no model weights.
 - `patches/`: upstream source hashes and provenance information to prevent overwriting incompatible versions.
 - `config/`, `scripts/`: configuration examples, service control, data preparation, and build tools. CLI messages currently remain in Chinese.
-- `docs/`: performance, deployment, and validation records. An English deployment guide is available; detailed historical and driver-reference documents remain in Chinese.
+- `docs/`: performance, deployment, and validation records. English deployment, CMP P2P, and NVMe GDS guides are available; detailed historical records remain in Chinese.
 
 ## Acknowledgments and license
 
