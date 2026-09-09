@@ -90,7 +90,7 @@ python3 scripts/check-gds-host.py --data-path /实际的/PLE目录
 
 参考机器的驱动构建脚本还使用 `driver/local-src`、`driver/local-patches`，包括 `0011-p2p-bar1.patch`、`0013-skip-mailbox-peer-preinit.patch`、`0015-bar1p2p-readcap-override.patch` 等。这些本地 overlay 目录不存在于上面审查的外部提交中，不能将两者视为完全相同的驱动版本。
 
-本仓库已将 BAR1/P2P 增量补丁整理到 [drivers/cmp-bar1](../drivers/cmp-bar1/README.md)，提供固定公开源码、校验、构建、手动安装与恢复说明。整理版不携带本机超频配置，也不等同于正在运行的完整 v0.3 驱动；平台读取能力覆盖需显式选择。旧补丁的同 switch 假设已经修正，当前参考拓扑仍以 H12D 实测为准。
+本仓库已将 BAR1/P2P 增量补丁整理到 [drivers/cmp-bar1](../drivers/cmp-bar1/README.md)，提供固定公开源码、校验、构建、手动安装与恢复说明。整理版不等同于正在运行的完整 v0.3 驱动；平台读取能力覆盖需显式选择。旧补丁的同 switch 假设已经修正，当前参考拓扑仍以 H12D 实测为准。
 
 ## 外部项目的配置差异
 

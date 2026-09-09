@@ -90,7 +90,7 @@ Read from the machine hosting the service on 2026-09-08:
 
 The reference driver build script also uses `driver/local-src` and `driver/local-patches`, including `0011-p2p-bar1.patch`, `0013-skip-mailbox-peer-preinit.patch`, and `0015-bar1p2p-readcap-override.patch`. These local overlay directories are not present in the external commit reviewed above. The two driver versions must not be treated as identical.
 
-The BAR1/P2P additions are now packaged in [drivers/cmp-bar1](../drivers/cmp-bar1/README.en.md), with pinned public sources, verification, build, manual installation and recovery instructions. This extracted version excludes the host overclock configuration and is not identical to the running full v0.3 driver. The platform read-capability override requires explicit opt-in. Obsolete common-switch claims were corrected; the reference topology remains the measured H12D setup.
+The BAR1/P2P additions are now packaged in [drivers/cmp-bar1](../drivers/cmp-bar1/README.en.md), with pinned public sources, verification, build, manual installation and recovery instructions. This extracted version is not identical to the running full v0.3 driver. The platform read-capability override requires explicit opt-in. Obsolete common-switch claims were corrected; the reference topology remains the measured H12D setup.
 
 ## Differences in the external installer
 

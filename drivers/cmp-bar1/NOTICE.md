@@ -26,6 +26,4 @@ part of the vLLM runtime and is not automatically installed by this project.
   NVIDIA code retains its notices. See [LICENSE.GPL-2.0](LICENSE.GPL-2.0).
 
 The root Apache-2.0 license does not replace these third-party terms. No kernel
-module binaries or firmware are distributed here. The downloaded upstream CMP
-source contains optional clock code; preparation enables only its P2P macro,
-not its clock/timing macros, and does not copy the host's overclock configuration.
+module binaries or firmware are distributed here. Preparation enables P2P in the downloaded upstream CMP source through its build configuration.

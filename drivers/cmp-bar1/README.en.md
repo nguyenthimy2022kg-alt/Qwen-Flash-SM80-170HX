@@ -6,8 +6,7 @@ An inspectable BAR1/P2P adaptation for CMP 170HX systems that need driver change
 Skip this directory if P2P/GDS already works. The model launcher never calls it,
 and nothing here automatically installs a driver.
 
-**Status: this is a reference build on pinned public sources, without the host's
-overclock configuration. It is not a byte-identical copy of the running driver.**
+**Status: this is a reference build on pinned public sources. It is not a byte-identical copy of the running driver.**
 The historical host driver passed peer transfers and strict NVMe reads. Compilation
 of this extracted version does not replace runtime validation after installation.
 
@@ -23,7 +22,7 @@ For concepts and selection, start with [component roles, BAR1 resizing/mapping, 
 | Optional `0015`: override platform status | Allows platform reads for selected CMP IDs; requires explicit selection and actual peer-transfer validation on the target host |
 | `prepare.py`: prepare sources | Downloads and verifies pinned sources, generates configuration and applies patches; compilation and manual installation are separate steps |
 
-**Implementation limits:** the cmpunlocker base also includes PCIe Gen2 adaptation; the three extra patches do not work independently. In addition to peer mappings, 0011 changes the global ReBAR default, relaxes some mapping teardown diagnostics and includes a Blackwell branch; its changes are not fully scoped to CMP devices. 0015 does not inspect actual PCIe routing or guarantee support on other hardware. Preparation writes only the source tree and cache and does not enable the host's memory-clock/timing overrides.
+**Implementation limits:** the cmpunlocker base also includes PCIe Gen2 adaptation; the three extra patches do not work independently. In addition to peer mappings, 0011 changes the global ReBAR default, relaxes some mapping teardown diagnostics and includes a Blackwell branch; its changes are not fully scoped to CMP devices. 0015 does not inspect actual PCIe routing or guarantee support on other hardware. Preparation writes only the source tree and cache.
 
 See [NOTICE.md](NOTICE.md) for provenance, changes and licenses. The root Apache
 license does not replace this directory's separate upstream license terms.
@@ -78,8 +77,7 @@ Do not stack runs in one output tree. `--cache` selects the download cache.
 Source archives and supplied patches are SHA256-verified; versions cannot silently
 change. `cmp-bar1-build.json` records choices; `cmp-bar1-patches.log` records patch
 application. Do not install unless `.ko` files were actually built.
-The process does not invoke upstream `install.sh`, change IOMMU/GRUB/power/core
-offsets, or copy the host's memory-overclock configuration.
+This process prepares build sources only; driver installation and system configuration are separate steps below.
 
 ## 3. Install and recover (manual Ubuntu reference)
 

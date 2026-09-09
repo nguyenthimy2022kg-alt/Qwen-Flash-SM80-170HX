@@ -17,7 +17,7 @@
 | 尚未安装 CUDA/cuFile 或 GDS 工具 | 先完成相应安装；本文后面的命令默认 `gdscheck.py`、`gdsio` 已可用 |
 | CMP 尚未具备所需的 BAR1/P2P 能力 | 先完成驱动适配；只复制本文参数或安装公开 cmpunlocker，不能保证复现参考机器 |
 
-参考机器使用额外的 CMP 驱动 overlay（本地补丁）。本仓库现在提供 [不含本机超频配置的 BAR1/P2P 参考构建](../drivers/cmp-bar1/README.md)，并非运行驱动的完整复制；来源差异见 [CMP P2P 部署参考](CMP_P2P.md)。已有原生支持或通过其他方式满足 [主机验收条件](从零部署.md#主机验收条件) 的机器无需使用相同补丁。
+参考机器使用额外的 CMP 驱动 overlay（本地补丁）。本仓库现在提供 [BAR1/P2P 参考构建](../drivers/cmp-bar1/README.md)，并非运行驱动的完整复制；来源差异见 [CMP P2P 部署参考](CMP_P2P.md)。已有原生支持或通过其他方式满足 [主机验收条件](从零部署.md#主机验收条件) 的机器无需使用相同补丁。
 
 安装入口见 [CUDA Linux 安装指南](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) 和 [GDS 安装与排障指南](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html)。按操作系统、驱动和目标路径选择匹配版本；这些资料不包含本机 CMP 适配。历史验证使用 CUDA 13.0、GDS `1.15.1.6`、libcufile `2.12`，当前官方文档可能对应其他版本。
 
