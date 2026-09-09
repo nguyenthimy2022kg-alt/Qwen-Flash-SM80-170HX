@@ -65,6 +65,8 @@ Requires Linux, Docker, NVIDIA Container Toolkit, a CUDA 13-compatible driver, w
 
 **Validate capabilities on the target host.** The reference driver's patches and IOMMU/filesystem settings are examples, not mandatory settings to copy. The required outcomes are working two-GPU P2P and validated strict cuFile direct reads, alongside the specified hardware, model format, and software stack. CMP reference documents: [P2P setup](docs/CMP_P2P.en.md) · [NVMe GDS reproduction guide](docs/GDS_NVME_P2PDMA_REPRODUCTION.en.md).
 
+See [reference hardware and PCIe topology](docs/REFERENCE_HARDWARE.en.md) for the CPU, motherboard, SSD, and connection diagram. These devices are not behind a common PCIe switch; one GPU reads the PLE data and broadcasts it to the other.
+
 Once the model and PLE data are prepared:
 
 ```bash

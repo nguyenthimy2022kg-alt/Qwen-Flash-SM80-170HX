@@ -9,18 +9,19 @@
 
 本文的 IOMMU、NVMe multipath、ext4 和 BAR1 设置，以及后文的门禁检查，均针对下述参考路径。其他机器不要求逐项相同，应根据自己的硬件与驱动选择配置，并满足 [主机验收条件](从零部署.md#主机验收条件)；机器专用补丁不是 vLLM 部署的必需依赖。
 
+**硬件与接线见 [参考硬件与 PCIe 拓扑](REFERENCE_HARDWARE.md)**：本机没有使用 PCIe switch 连接 SSD 和 GPU，990 PRO 与读盘卡位于不同 CPU 根端口。先确认数据所在盘和拓扑，再判断后面的参考配置是否适用。
+
 ## 数据路径与适用范围
 
 参考环境最终使用的不是传统 `nvidia-fs` 路径，而是：
 
 ```text
-Samsung 990 PRO
-  → Linux NVMe PCI_P2PDMA
-  → cuFile
-  → GPU BAR1 / 显存
+控制路径：应用 → cuFile → 文件系统 / NVMe 驱动
+数据路径：Samsung 990 PRO → PCIe → GPU BAR1 / 显存
+          （NVMe P2PDMA，数据本体不经过 CPU 内存中转）
 ```
 
-成功判定必须同时看到：
+在对应工具的输出和实际读取日志中核对以下证据（不是要求每个工具都打印所有行）：
 
 ```text
 PCIP2PDMACapable:1
@@ -47,7 +48,7 @@ nvidia-smi topo -m
 
 uname -a
 cat /proc/cmdline
-findmnt -no SOURCE,FSTYPE,OPTIONS /
+findmnt -T /absolute/path/to/ple-artifact -o TARGET,SOURCE,FSTYPE,OPTIONS
 cat /sys/module/nvme_core/parameters/multipath 2>/dev/null || true
 lspci -nn | grep -Ei 'NVIDIA|Non-Volatile memory|NVMe'
 ```
@@ -198,7 +199,7 @@ sudo reboot
 
 ```bash
 cat /proc/cmdline
-findmnt -no SOURCE,FSTYPE,OPTIONS /
+findmnt -T /absolute/path/to/ple-artifact -o TARGET,SOURCE,FSTYPE,OPTIONS
 cat /sys/module/nvme_core/parameters/multipath
 find /sys/class/iommu -mindepth 1 -maxdepth 1 -print
 nvidia-smi
@@ -253,6 +254,8 @@ export CUFILE_LOGGING_LEVEL=TRACE
 
 ## 10. 严格验证
 
+下面 `-d 0` 指测试进程所见的 CUDA 设备 0，不一定是主机 `nvidia-smi` 的 GPU 0。核对 `CUDA_VISIBLE_DEVICES` 和测试输出中的 GPU UUID/BDF，确保测的是准备承担读盘的卡；只测另一张卡不能验收当前路径。工具路径按实际 CUDA/GDS 安装位置替换。
+
 先运行平台检查：
 
 ```bash
@@ -287,7 +290,7 @@ TEST_FILE="$TEST_DIR/gds-test-64m-$(date +%Y%m%d-%H%M%S).bin"
   -d 0 -m 0 -w 1 -s 64M -o 0 -i 4M -x 0 -I 0 -V
 ```
 
-同时检查 cuFile 日志：
+同时检查本次测试实际写入的 cuFile 日志；下面是默认路径示例，容器内路径可能不同，应核对配置和时间戳，避免读取历史日志：
 
 ```bash
 rg -n "P2PDMA|compat|bounce|5001|801|POSIX" /var/log/cufile.log

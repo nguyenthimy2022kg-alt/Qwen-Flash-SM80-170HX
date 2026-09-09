@@ -9,18 +9,19 @@ This guide adapts the project's original GDS reproduction records. Device UUIDs 
 
 The IOMMU, NVMe multipath, ext4, BAR1 settings, and validation checks below apply to this reference path. Other machines need not use identical settings. Choose a configuration appropriate for the hardware and driver and meet the [deployment requirements](DEPLOYMENT.en.md#requirements). Machine-specific patches are not mandatory vLLM dependencies.
 
+**See [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md)**: this machine has no PCIe switch on the SSD/GPU paths. The 990 PRO and reading GPU use different CPU root ports. Identify the data disk and topology before applying the reference settings below.
+
 ## Data path and scope
 
 The reference environment ultimately uses the following path, rather than the traditional `nvidia-fs` path:
 
 ```text
-Samsung 990 PRO
-  → Linux NVMe PCI_P2PDMA
-  → cuFile
-  → GPU BAR1 / VRAM
+Control path: application → cuFile → filesystem / NVMe driver
+Data path: Samsung 990 PRO → PCIe → GPU BAR1 / VRAM
+           (NVMe P2PDMA; no payload staging in CPU RAM)
 ```
 
-Successful validation requires all of these indicators:
+Check the following evidence across the relevant tools and actual I/O logs; no single tool is expected to print every line:
 
 ```text
 PCIP2PDMACapable:1
@@ -46,7 +47,7 @@ nvidia-smi topo -m
 
 uname -a
 cat /proc/cmdline
-findmnt -no SOURCE,FSTYPE,OPTIONS /
+findmnt -T /absolute/path/to/ple-artifact -o TARGET,SOURCE,FSTYPE,OPTIONS
 cat /sys/module/nvme_core/parameters/multipath 2>/dev/null || true
 lspci -nn | grep -Ei 'NVIDIA|Non-Volatile memory|NVMe'
 ```
@@ -190,7 +191,7 @@ Verify each item:
 
 ```bash
 cat /proc/cmdline
-findmnt -no SOURCE,FSTYPE,OPTIONS /
+findmnt -T /absolute/path/to/ple-artifact -o TARGET,SOURCE,FSTYPE,OPTIONS
 cat /sys/module/nvme_core/parameters/multipath
 find /sys/class/iommu -mindepth 1 -maxdepth 1 -print
 nvidia-smi
@@ -245,6 +246,8 @@ Use `allow_compat_mode=false` in the JSON and actual logs as the evidence. Envir
 
 ## 10. Strict validation
 
+Below, `-d 0` refers to CUDA device 0 visible to the test process, which may differ from host GPU 0 in `nvidia-smi`. Verify `CUDA_VISIBLE_DEVICES` and the GPU UUID/BDF in the test output against the intended reading GPU. Testing only the other GPU does not validate this path. Adjust tool paths to the actual CUDA/GDS installation.
+
 Run the platform check first:
 
 ```bash
@@ -278,7 +281,7 @@ TEST_FILE="$TEST_DIR/gds-test-64m-$(date +%Y%m%d-%H%M%S).bin"
   -d 0 -m 0 -w 1 -s 64M -o 0 -i 4M -x 0 -I 0 -V
 ```
 
-Also inspect the cuFile log:
+Inspect the cuFile log produced by this test. The path below is a default example; container paths may differ. Check the configuration and timestamps to avoid using stale logs:
 
 ```bash
 rg -n "P2PDMA|compat|bounce|5001|801|POSIX" /var/log/cufile.log

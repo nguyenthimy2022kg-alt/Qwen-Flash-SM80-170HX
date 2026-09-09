@@ -12,6 +12,8 @@
 
 Reference driver and filesystem settings are examples, not a requirement to reproduce the same machine. The default cuFile configuration uses NVMe P2PDMA. Other GDS paths require their own configuration and direct-read validation. See the [CMP P2P reference](CMP_P2P.en.md), [GDS reproduction guide](GDS_NVME_P2PDMA_REPRODUCTION.en.md), and [NVIDIA GDS documentation](https://docs.nvidia.com/gpudirect-storage/).
 
+See [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md): one EPYC 7532, two CMP 170HX GPUs, and a 990 PRO 4TB, with no PCIe switch on their paths.
+
 ## 1. Download the pinned model
 
 Run preparation commands from the repository root. The examples place data under `$HOME/qwen-flash-data`; choose a location on a suitable filesystem with sufficient free space.

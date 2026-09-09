@@ -63,6 +63,8 @@ cd Qwen-Flash-SM80-170HX
 
 **主机部署以能力验证为准**：在满足双 SM80、模型格式与固定软件栈要求的前提下，双卡 P2P 和 strict cuFile 直读数据校验通过即可继续部署。cmpunlocker、本地驱动补丁及参考机器的 IOMMU/文件系统参数均为适配案例，不要求逐项复刻。具体条件见 [主机验收条件](docs/从零部署.md#主机验收条件)。
 
+参考机器的 CPU、主板、SSD 和连接图见 [参考硬件与 PCIe 拓扑](docs/REFERENCE_HARDWARE.md)。本机 SSD 与 GPU 不在同一个 PCIe switch 下，当前由一张卡直读，再广播给另一张卡。
+
 1. 准备含 MTP 权重的对应 NVFP4 模型，以及 **FP8 PLE 检查点和 GDS 数据**。仓库不包含模型权重。[数据准备说明](docs/使用说明.md#模型与-ple-数据)
 2. 构建固定上游版本的镜像：
 
