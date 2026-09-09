@@ -11,15 +11,19 @@ overclock configuration. It is not a byte-identical copy of the running driver.*
 The historical host driver passed peer transfers and strict NVMe reads. Compilation
 of this extracted version does not replace runtime validation after installation.
 
+For concepts and selection, start with [component roles, BAR1 resizing/mapping, and the three patches](../../docs/CMP_P2P.en.md). This page then covers the build and installation procedure.
+
 ## Contents
 
-| Component | Purpose and limits |
+| Component | Problem addressed / functionality |
 |---|---|
-| Pinned cmpunlocker base | CMP initialization, memory-capacity unlock and BAR1 resizing; also contains PCIe Gen2 adaptation. The three extra patches are not a standalone driver |
-| `0011` | BAR1 P2P mappings and page tables; also changes the global ReBAR default, relaxes some mapping teardown diagnostics and includes a Blackwell branch. It is not fully scoped to CMP devices |
-| `0013` | Skips mailbox peer pre-registration when BAR1 is selected, avoiding a protocol conflict |
-| Optional `0015` | Overrides the platform read-capability rejection for CMP IDs; explicit opt-in, with no automatic validation of PCIe routing |
-| `prepare.py` | Verifies/downloads sources, enables P2P without memory-clock/timing overrides, and applies patches. Writes only the chosen source tree and cache |
+| Pinned cmpunlocker base | CMP initialization, memory-capacity unlock, BAR1 resizing and P2P support; the base for the additional patches |
+| `0011`: connect mappings | Adds address mapping and page-table handling needed for BAR1 peer access |
+| `0013`: remove a conflict | Skips mailbox pre-registration (another peer protocol) when BAR1 is selected, avoiding a protocol conflict |
+| Optional `0015`: override platform status | Allows platform reads for selected CMP IDs; requires explicit selection and actual peer-transfer validation on the target host |
+| `prepare.py`: prepare sources | Downloads and verifies pinned sources, generates configuration and applies patches; compilation and manual installation are separate steps |
+
+**Implementation limits:** the cmpunlocker base also includes PCIe Gen2 adaptation; the three extra patches do not work independently. In addition to peer mappings, 0011 changes the global ReBAR default, relaxes some mapping teardown diagnostics and includes a Blackwell branch; its changes are not fully scoped to CMP devices. 0015 does not inspect actual PCIe routing or guarantee support on other hardware. Preparation writes only the source tree and cache and does not enable the host's memory-clock/timing overrides.
 
 See [NOTICE.md](NOTICE.md) for provenance, changes and licenses. The root Apache
 license does not replace this directory's separate upstream license terms.

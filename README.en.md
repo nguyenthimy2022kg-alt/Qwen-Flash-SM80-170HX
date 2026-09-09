@@ -42,7 +42,7 @@ Follow these stages in order. Full commands are in the [deployment guide](docs/D
 
 | Stage | Required outcome | Guide |
 |---|---|---|
-| 1. Prepare the host | Driver and GDS tools available; GPU P2P and strict SSD reads pass data validation | [Hardware](docs/REFERENCE_HARDWARE.en.md) · [P2P](docs/CMP_P2P.en.md) · [GDS](docs/GDS_NVME_P2PDMA_REPRODUCTION.en.md) |
+| 1. Prepare the host | Driver and GDS tools available; GPU P2P and strict SSD reads pass data validation | [Hardware](docs/REFERENCE_HARDWARE.en.md) · [P2P / BAR1](docs/CMP_P2P.en.md) · [GDS](docs/GDS_NVME_P2PDMA_REPRODUCTION.en.md) |
 | 2. Prepare the model | Download and check the pinned checkpoint, then convert and enroll PLE data | [Model and data preparation](docs/DEPLOYMENT.en.md#1-download-source-and-model) |
 | 3. Build and start | Set paths and GPU order, build the image, then start and wait for readiness | [Configuration and startup](docs/DEPLOYMENT.en.md) |
 

@@ -40,7 +40,7 @@
 
 | 步骤 | 完成条件 | 文档 |
 |---|---|---|
-| 1. 准备主机 | 驱动和 GDS 工具可用；双卡 P2P、SSD strict 直读数据校验通过 | [硬件与拓扑](docs/REFERENCE_HARDWARE.md) · [P2P](docs/CMP_P2P.md) · [GDS](docs/GDS_NVME_P2PDMA_REPRODUCTION.md) |
+| 1. 准备主机 | 驱动和 GDS 工具可用；双卡 P2P、SSD strict 直读数据校验通过 | [硬件与拓扑](docs/REFERENCE_HARDWARE.md) · [P2P / BAR1](docs/CMP_P2P.md) · [GDS](docs/GDS_NVME_P2PDMA_REPRODUCTION.md) |
 | 2. 准备模型 | 下载固定检查点，检查完整性，转换并登记 PLE 数据 | [模型与数据准备](docs/从零部署.md#1-下载源码与模型) |
 | 3. 构建并启动 | 填写路径与 GPU 顺序，构建镜像，启动并等待就绪 | [配置与启动](docs/从零部署.md) |
 

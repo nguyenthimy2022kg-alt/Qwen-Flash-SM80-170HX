@@ -1,18 +1,78 @@
-# CMP 170HX P2P deployment reference
+# CMP 170HX: P2P, BAR1 and GDS
 
 [简体中文](CMP_P2P.md) | **English** · [Home](../README.en.md)
 
-The reference environment uses [qg19932GH/cmpunlocker](https://github.com/qg19932GH/cmpunlocker) for GPU P2P support. This operates at the driver layer, independently of vLLM. This repository now provides separate [BAR1/P2P reference patches](../drivers/cmp-bar1/README.en.md), never automatically installed during image builds or service startup.
+This project uses two direct-transfer paths: **GPU ↔ GPU for computation data, and SSD → GPU for PLE table reads.** They use different software interfaces and require separate validation.
 
-The upstream commit reviewed on 2026-09-08 was [`aaddfd4ce84a2804a7e0cd332acc4c26c79063d9`](https://github.com/qg19932GH/cmpunlocker/tree/aaddfd4ce84a2804a7e0cd332acc4c26c79063d9). This identifies the documentation review snapshot; **it has not been confirmed as the commit originally used to install the reference machine's driver**.
+## What each component does
 
-## Scope
+| Component | Role in this project |
+|---|---|
+| **P2P (peer-to-peer transfers)** | In the two-GPU communication discussion, direct exchanges between GPUs that reduce staging in CPU RAM |
+| **BAR1 (a PCIe address window into VRAM)** | Lets external devices access selected GPU memory through PCIe addresses; the window and mappings require driver support |
+| **[cmpunlocker](https://github.com/qg19932GH/cmpunlocker)** | Base CMP driver adaptation, including memory-capacity unlock, BAR1 resizing and P2P support |
+| **Three additional patches supplied here** | Extend the cmpunlocker base with BAR1 peer mappings and fixes for initialization conflicts and platform restrictions; see [provenance](../drivers/cmp-bar1/NOTICE.md) |
+| **GDS / cuFile (NVIDIA storage software and API)** | Works with the driver and Linux NVMe support to read SSD data directly into VRAM |
+| **This project's vLLM reader** | Schedules PLE table reads from model inputs and supplies the resulting data to model computation |
 
-The host must meet the [host acceptance criteria](DEPLOYMENT.en.md#host-acceptance-criteria). cmpunlocker and the local overlay described below are adaptations used on the reference machine, not mandatory vLLM dependencies. A machine with working P2P/GDS does not need the same patches. Choose an implementation appropriate for the hardware and validate actual data transfers and model execution.
+The preparation script downloads pinned NVIDIA driver and cmpunlocker sources, then applies the additional patches. It prepares sources only; installation is a separate step in the [driver build guide](../drivers/cmp-bar1/README.en.md).
 
-There is no PCIe switch on this machine’s GPU/SSD paths. See [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md) for the CPU, motherboard, SSD, root-port layout, and reading-GPU selection.
+## BAR1 resizing versus mapping
+
+**Resizing determines the window's size; mapping determines which VRAM locations its addresses refer to.** A GPU-internal address cannot simply be reused by an external device. The driver establishes the correspondence:
+
+```text
+PCIe address used by an external device → BAR1 window → target VRAM location
+```
+
+With suitable hardware and driver support, another GPU can access target VRAM through these mappings. NVMe direct reads additionally need GDS to arrange the mappings required for storage transfers. **A larger BAR1 does not add physical VRAM, and a mapping does not prove successful data transfer.**
+
+The current project's data flow is:
+
+```text
+PLE data on SSD
+    │ GDS / NVMe P2PDMA: direct read into VRAM
+    ▼
+Reading GPU (rank 0)
+    │ NCCL: broadcast using the validated GPU P2P path
+    ▼
+Second GPU (rank 1)
+```
+
+One GPU reads and then broadcasts. The CPU still submits and schedules work; the payload does not need staging in CPU RAM. See [hardware and topology](REFERENCE_HARDWARE.en.md) for reading-GPU selection.
+
+## What the three patches fix
+
+| Patch | Original obstacle | Change and applicability |
+|---|---|---|
+| **0011: BAR1 mappings** | Selecting BAR1 still requires appropriate peer mappings and address translation | Connects mapping and page-table handling; depends on driver internals and needs review when changing driver versions |
+| **0013: initialization conflict** | Early mailbox registration (another peer protocol) causes BAR1 to be rejected due to a protocol conflict | Skips mailbox pre-registration when BAR1 is selected; applicable to the same initialization conflict on other hosts |
+| **0015: platform read restriction, optional** | The driver rejects an unrecognized platform/topology with a chipset-not-supported read status | Overrides the status to allow reads for device IDs `0x20C2` / `0x2082`; does not validate routing, so requires explicit opt-in and real transfer tests |
+
+The patches do not hard-code this host's PCIe slot addresses, but they are not universal CMP support. In particular, 0015 changes permission to attempt a transfer; it cannot add hardware capability. 0011 also includes some global driver behavior changes; see the [implementation limits](../drivers/cmp-bar1/README.en.md#contents).
+
+**Validation status:** the reference host's original full driver passed GPU peer transfers and SSD direct-read validation. The extracted public version passed a [full build](https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX/actions/runs/34310525583), but has not been installed and runtime-tested. These are different builds.
+
+## Where to start
+
+| Current state | Next step |
+|---|---|
+| Real GPU peer transfers and strict SSD direct reads both pass | Prepare the model using the [deployment guide](DEPLOYMENT.en.md); no need to install identical patches |
+| GPU peer transfers work, but SSD direct reads do not | Diagnose the storage path with the [GDS guide](GDS_NVME_P2PDMA_REPRODUCTION.en.md); SSD failure alone is not a reason to enable 0015 |
+| CMP BAR1/P2P is unavailable | Run the read-only inventory below, then diagnose and adapt using the [driver build guide](../drivers/cmp-bar1/README.en.md) |
+
+Run from the repository root:
+
+```bash
+python3 scripts/check-gds-host.py --data-path /actual/PLE/directory
+```
+
+The script inventories the environment. `NOT_TESTED` means no real transfers were tested. Use the [host acceptance criteria](DEPLOYMENT.en.md#host-acceptance-criteria) for final validation.
+The reference board is H12D, with no enumerated PCIe switch on GPU/SSD paths. Sharing a CPU or NUMA node, or reporting an `OK` capability matrix, does not replace real tests.
 
 ## Observed reference configuration
+
+The upstream commit reviewed on 2026-09-08 was [`aaddfd4ce84a2804a7e0cd332acc4c26c79063d9`](https://github.com/qg19932GH/cmpunlocker/tree/aaddfd4ce84a2804a7e0cd332acc4c26c79063d9). This identifies the documentation review snapshot; **it has not been confirmed as the commit originally used to install the reference machine's driver**.
 
 Read from the machine hosting the service on 2026-09-08:
 
@@ -31,8 +91,6 @@ Read from the machine hosting the service on 2026-09-08:
 The reference driver build script also uses `driver/local-src` and `driver/local-patches`, including `0011-p2p-bar1.patch`, `0013-skip-mailbox-peer-preinit.patch`, and `0015-bar1p2p-readcap-override.patch`. These local overlay directories are not present in the external commit reviewed above. The two driver versions must not be treated as identical.
 
 The BAR1/P2P additions are now packaged in [drivers/cmp-bar1](../drivers/cmp-bar1/README.en.md), with pinned public sources, verification, build, manual installation and recovery instructions. This extracted version excludes the host overclock configuration and is not identical to the running full v0.3 driver. The platform read-capability override requires explicit opt-in. Obsolete common-switch claims were corrected; the reference topology remains the measured H12D setup.
-
-Start with `python3 scripts/check-gds-host.py --data-path /actual/PLE/directory` for a read-only inventory. It does not perform transfer acceptance tests or modify drivers/system configuration.
 
 ## Differences in the external installer
 

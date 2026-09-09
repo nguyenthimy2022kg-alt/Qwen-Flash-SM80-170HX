@@ -5,6 +5,8 @@
 Updated: 2026-09-08  
 Validated environment: CMP 170HX / GA100-class SM80, Ubuntu 24.04, Linux 6.17, NVIDIA 610.43.03, CUDA 13.0 GDS.
 
+Start with [the roles of P2P, BAR1, cmpunlocker and GDS](CMP_P2P.en.md#what-each-component-does). This guide covers **SSD → GPU** configuration and validation; working GPU-to-GPU P2P does not prove SSD direct reads work.
+
 ## Before you start: what does this guide cover?
 
 This guide explains how the reference machine configures and validates its Samsung 990 PRO → GPU NVMe P2PDMA path. It starts with an environment that already has the driver and GDS tools; **installing the driver, CUDA/cuFile, and GDS from scratch is outside its scope**.

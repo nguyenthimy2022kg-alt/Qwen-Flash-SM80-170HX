@@ -5,6 +5,8 @@
 更新时间：2026-09-08  
 验证环境：CMP 170HX/GA100 类 SM80、Ubuntu 24.04、Linux 6.17、NVIDIA 610.43.03、CUDA 13.0 GDS
 
+先了解 [P2P、BAR1、cmpunlocker 与 GDS 的分工](CMP_P2P.md#各组件负责什么)。本文只展开 **SSD → GPU** 的配置与验证；双卡 P2P 成功并不代表 SSD 直通已成功。
+
 ## 阅读前：这篇文档能完成什么？
 
 本文说明参考机器如何配置并验收 Samsung 990 PRO → GPU 的 NVMe P2PDMA 路径。它从已具备驱动和 GDS 工具的环境开始；**驱动、CUDA/cuFile 和 GDS 的从零安装不在本文范围内**。
