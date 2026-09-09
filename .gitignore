@@ -5,6 +5,7 @@ __pycache__/
 *.pt
 *.safetensors
 .env
+.env.*
 config/local*.json
 runs/
 .cache/

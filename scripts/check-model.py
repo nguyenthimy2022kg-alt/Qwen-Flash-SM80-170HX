@@ -38,11 +38,16 @@ def inspect_checkpoint(model, source):
             entry = header.get(name)
             if not isinstance(entry, dict):
                 raise ValueError(f"{filename} 缺少索引张量 {name}")
-            begin, end = entry["data_offsets"]
-            shape = entry["shape"]
-            dtype = entry["dtype"]
-            if any(not isinstance(d, int) or d < 0 for d in shape):
+            offsets = entry.get("data_offsets")
+            shape = entry.get("shape")
+            dtype = entry.get("dtype")
+            if not isinstance(offsets, list) or len(offsets) != 2 or any(type(v) is not int for v in offsets):
+                raise ValueError(f"{filename}: {name} data_offsets 必须为两个整数")
+            begin, end = offsets
+            if not isinstance(shape, list) or any(type(d) is not int or d < 0 for d in shape):
                 raise ValueError(f"{filename}: {name} shape 无效")
+            if not isinstance(dtype, str) or dtype not in _KNOWN_ITEMSIZE:
+                raise ValueError(f"{filename}: {name} dtype 无效或不支持：{dtype}")
             expected = math.prod(shape) * _KNOWN_ITEMSIZE[dtype]
             if begin < 0 or end - begin != expected or start + end > size:
                 raise ValueError(f"{filename}: {name} 长度无效或文件未下载完整")
@@ -81,4 +86,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (OSError, ValueError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        sys.exit(1)

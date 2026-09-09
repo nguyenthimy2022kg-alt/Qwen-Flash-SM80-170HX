@@ -7,7 +7,7 @@ Validated environment: CMP 170HX / GA100-class SM80, Ubuntu 24.04, Linux 6.17, N
 
 ## Before you start: what does this guide cover?
 
-**This is a configuration and validation reference for a tested environment, not a standalone installation tutorial. It does not guarantee that copying the steps will enable NVMe GDS on any CMP machine.**
+This guide explains how the reference machine configures and validates its Samsung 990 PRO → GPU NVMe P2PDMA path. It starts with an environment that already has the driver and GDS tools; **installing the driver, CUDA/cuFile, and GDS from scratch is outside its scope**.
 
 | Current environment | How to use this guide |
 |---|---|
@@ -15,17 +15,11 @@ Validated environment: CMP 170HX / GA100-class SM80, Ubuntu 24.04, Linux 6.17, N
 | CUDA/cuFile or GDS tools are not installed | Install them first; commands below assume `gdscheck.py` and `gdsio` are available |
 | The CMP GPU lacks the required BAR1/P2P capabilities | Complete driver adaptation first; copying parameters or installing public cmpunlocker alone does not reproduce the reference machine |
 
-This guide does not provide step-by-step driver/CUDA/GDS installation or distribute the reference machine's additional CMP driver overlay (local patches). That overlay differs from public cmpunlocker; see the [CMP P2P deployment reference](CMP_P2P.en.md). Machines with native support or another implementation of the required capabilities do not need the same patches.
+The reference machine uses an additional CMP driver overlay (local patches) that this repository does not distribute. See the [CMP P2P deployment reference](CMP_P2P.en.md) for its differences from public cmpunlocker. Machines that meet the [host acceptance criteria](DEPLOYMENT.en.md#host-acceptance-criteria) through native support or another implementation do not need the same patches.
 
-For initial setup, consult the [CUDA installation guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) and [GDS installation and troubleshooting guide](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html). Select versions compatible with the OS, driver, and intended GDS path. These official guides do not supply the reference machine's additional CMP adaptations. This reference uses CUDA 13.0 GDS; current official documentation may describe a different version.
+For installation, consult the [CUDA installation guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) and [GDS installation and troubleshooting guide](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html). Select versions compatible with the OS, driver, and intended path; these guides do not supply the local CMP adaptations. Historical validation used CUDA 13.0, GDS `1.15.1.6`, and libcufile `2.12`; current official documentation may describe other versions.
 
-The host needs the relevant driver and kernel support. The environment running the tests (host or container) needs CUDA/cuFile, `gdscheck.py`, `gdsio`, and access to the target GPU and data files. Tools being present inside a container does not establish host direct-I/O support. Once prepared, proceed with the checks below and validate actual reads and data correctness with CPU compatibility fallback disabled.
-
-This guide adapts the project's original GDS reproduction records. Device UUIDs have been replaced with placeholders, and the examples include configuration backup/restore and writing test data before validating reads. See the [CMP P2P deployment reference](CMP_P2P.en.md) for driver provenance and version details. The system settings below belong to a specific reference environment and must be reviewed for each target machine. The project launcher does not apply them.
-
-The IOMMU, NVMe multipath, ext4, BAR1 settings, and validation checks below apply to this reference path. Other machines need not use identical settings. Choose a configuration appropriate for the hardware and driver and meet the [deployment requirements](DEPLOYMENT.en.md#requirements). Machine-specific patches are not mandatory vLLM dependencies.
-
-**See [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md)**: this machine has no PCIe switch on the SSD/GPU paths. The 990 PRO and reading GPU use different CPU root ports. Identify the data disk and topology before applying the reference settings below.
+The host must provide the relevant driver and kernel support. The test environment (host or container) needs the tools above and access to the target GPU and data files. Identify the data disk and reading GPU using the [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md), then run the preliminary checks. The IOMMU, multipath, ext4, and BAR1 settings below belong to the reference path; review and change them as needed. An environment that already has the required capabilities can proceed to the strict-test setup in section 9. The project launcher does not apply these system changes.
 
 ## Data path and scope
 
@@ -44,12 +38,10 @@ PCIP2PDMACapable:1
 checkIfAllGPUsSupportP2PDMA(): 1
 NVMe P2PDMA: Supported
 cuFile using NVME P2PDMA mode
-use_compat_mode=false
+properties.use_compat_mode : false
 ```
 
 A zero exit code from `gdscheck.py`, or successful I/O in compatibility mode, does not establish that direct I/O is working.
-
-This is a tested procedure for a customized CMP 170HX environment, not a universal unlock procedure for NVIDIA GPUs. Do not copy drivers, firmware, VBIOS, or cmpunlocker installations blindly. First identify the GPU UUID, GPU PCI BDF, NVMe BDF, and topology.
 
 ## 1. Preliminary checks
 
@@ -171,11 +163,12 @@ Regenerate initramfs and verify that the configuration is included:
 
 ```bash
 sudo update-initramfs -u -k "$(uname -r)"
+sudo lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -F 'etc/modprobe.d/nvme.conf'
 ```
 
 ## 6. Set the ext4 root mount to ordered data mode
 
-On the tested ext4 root filesystem, cuFile file registration required `data=ordered` in the actual mount options. When the target NVMe data is on the root filesystem, add this GRUB parameter:
+On the tested ext4 root filesystem, cuFile file registration required `data=ordered` in the actual mount options, consistent with [NVIDIA's ext4 mount requirements](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html#mounting-a-local-file-system-for-gds). When the target NVMe data is on the root filesystem, add this GRUB parameter:
 
 ```text
 rootflags=data=ordered
@@ -222,7 +215,11 @@ nvme multipath:      N
 /sys/class/iommu:    empty directory or no AMD IOMMU instances
 ```
 
-Also verify that the active NVIDIA RegistryDwords include:
+Read the active NVIDIA module parameters and verify that RegistryDwords include the values below:
+
+```bash
+grep -E 'EnableResizableBar|RegistryDwords' /proc/driver/nvidia/params
+```
 
 ```text
 RMForceStaticBar1=1;RMPcieP2PType=1;RmForceDisableIomapWC=1
@@ -239,7 +236,8 @@ Use a dedicated test JSON file rather than overwriting the global cuFile configu
   },
   "properties": {
     "use_pci_p2pdma": true,
-    "allow_compat_mode": false
+    "allow_compat_mode": false,
+    "force_compat_mode": false
   },
   "block": {
     "nvme": {
@@ -255,30 +253,34 @@ For the test, set:
 export CUFILE_ENV_PATH_JSON=/path/to/strict-p2pdma.json
 export CUFILE_USE_PCIP2PDMA=1
 export CUFILE_ALLOW_COMPAT_MODE=0
+unset CUFILE_FORCE_COMPAT_MODE
 export CUFILE_LOGGING_LEVEL=TRACE
+GDS_LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gds-p2pdma-logs.XXXXXX")
 ```
 
-Use `allow_compat_mode=false` in the JSON and actual logs as the evidence. Environment variables alone, or a successful process exit, do not rule out CPU compatibility fallback.
+Use the effective configuration and actual I/O logs as evidence. Environment variables alone, or a successful process exit, do not rule out CPU compatibility fallback. The commands below use `CUFILE_LOGFILE_PATH` to save a separate log for each test. Without a configured log directory or path, logs normally go to the application's working directory, not a fixed `/var/log/cufile.log` location. See [NVIDIA's logging and environment-variable documentation](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html#environment-variables-used-by-gpudirect-storage).
 
 ## 10. Strict validation
 
-Below, `-d 0` refers to CUDA device 0 visible to the test process, which may differ from host GPU 0 in `nvidia-smi`. Verify `CUDA_VISIBLE_DEVICES` and the GPU UUID/BDF in the test output against the intended reading GPU. Testing only the other GPU does not validate this path. Adjust tool paths to the actual CUDA/GDS installation.
+Below, `-d 0` refers to CUDA device 0 visible to the test process, which may differ from host GPU 0 in `nvidia-smi`. Verify `CUDA_VISIBLE_DEVICES` and the GPU BDF in the cuFile log against the intended reading GPU. Logs may use decimal bus numbers: for example, `197` corresponds to `c5`. `-m 0` uses CUDA device-memory allocation; `-x 0` selects synchronous GDS I/O. Adjust tool paths to the actual CUDA/GDS installation.
 
 Run the platform check first:
 
 ```bash
-/usr/local/cuda-13.0/gds/tools/gdscheck.py -p
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/gdscheck.cufile.log" \
+  /usr/local/cuda-13.0/gds/tools/gdscheck.py -p
 ```
 
-Inspect the output, not just the exit code. Look for:
+First inspect NVMe P2PDMA support and the effective configuration in the platform summary. The reference version reports the following; spacing may differ:
 
 ```text
-PCIP2PDMACapable:1
-checkIfAllGPUsSupportP2PDMA(): 1
 NVMe P2PDMA: Supported
-cuFile using NVME P2PDMA mode
+properties.use_compat_mode : false
+properties.force_compat_mode : false
 IOMMU: disabled
 ```
+
+`PCIP2PDMACapable:1`, `checkIfAllGPUsSupportP2PDMA(): 1`, and `cuFile using NVME P2PDMA mode` appear in this tool version's cuFile log; the platform summary need not repeat them. A platform check still does not replace actual I/O on the target file.
 
 Next, validate 64 MiB of data in a directory confirmed to reside on the target NVMe ext4 mount. The path below is a placeholder; do not put the test file on tmpfs:
 
@@ -287,32 +289,35 @@ TEST_DIR=/path/on/the-target-nvme-ext4
 TEST_FILE="$TEST_DIR/gds-test-64m-$(date +%Y%m%d-%H%M%S).bin"
 
 # Write data with validation enabled; -I 1 -V writes and then reads to verify.
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/write-64m.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_FILE" \
   -d 0 -m 0 -w 1 -s 64M -o 0 -i 4M -x 0 -I 1 -V
 
 # Separately validate SSD-to-GPU reads using the same size and offset.
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/read-64m.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_FILE" \
   -d 0 -m 0 -w 1 -s 64M -o 0 -i 4M -x 0 -I 0 -V
 ```
 
-Inspect the cuFile log produced by this test. The path below is a default example; container paths may differ. Check the configuration and timestamps to avoid using stale logs:
+Each command should exit successfully. Resolve any write or verification failure before running the next command. Read verification with `-V` requires data previously written with matching thread count, size, offset, and verification mode; see the [NVIDIA gdsio option reference](https://docs.nvidia.com/gpudirect-storage/configuration-guide/index.html#gdsio-utility). Retain stdout/stderr and inspect this read's log:
 
 ```bash
-rg -n "P2PDMA|compat|bounce|5001|801|POSIX" /var/log/cufile.log
+grep -nEi 'P2PDMA|p2p chunk read|compat|bounce|errno|5001|801|POSIX' \
+  "$GDS_LOG_DIR/read-64m.cufile.log"
 ```
 
-Required outcomes:
+Check these outcomes together:
 
-```text
-NVMe P2PDMA: Supported
-use_compat_mode=false
-Data validation passed
-No error 801
-No cuFile 5001
-No POSIX/bounce payload fallback
-```
+| Evidence | Expected for this example |
+|---|---|
+| gdsio read summary | `DataSetSize: 65536/65536(KiB)`, `ops: 16`; no short reads, I/O errors, or data mismatches |
+| This read's cuFile log | Successful file registration; 16 `cuFile p2p chunk read` operations, each 4 MiB with `errno: 0` |
+| Actual transfer path | `p2p mode: 1`, `compat: 0`, `bounce-buffer ptr 0`; no CPU/POSIX payload staging |
+| Errors | No CUDA 801, cuFile 5001, or other transfer errors |
+
+Successful `gdsio -V` runs do not necessarily print a separate validation-success banner; check complete transfers and the absence of verification failures. POSIX memory-pool initialization or routing messages containing `bounce buffer` do not by themselves indicate fallback. Those lines exist in the successful reference logs, so inspect the actual path of each I/O. These formats belong to the reference version; look for equivalent evidence in other versions.
 
 If the output says `NVMe: Unsupported` but also reports `NVMe P2PDMA: Supported`, distinguish the paths: the former usually describes the traditional `nvidia-fs` path, while the latter is the path used here. An unloaded `nvidia-fs` module does not by itself mean this procedure failed.
 
@@ -321,10 +326,12 @@ If the output says `NVMe: Unsupported` but also reports `NVMe P2PDMA: Supported`
 Measure throughput only after functional validation passes. A throughput benchmark should not be the first functional test:
 
 ```bash
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/write-4g.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_DIR/gds-throughput-4g.bin" \
   -d 0 -m 0 -w 1 -s 4G -o 0 -i 4M -x 0 -I 1 -V
 
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/read-4g.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_DIR/gds-throughput-4g.bin" \
   -d 0 -m 0 -w 1 -s 4G -o 0 -i 4M -x 0 -I 0
@@ -333,25 +340,25 @@ Measure throughput only after functional validation passes. A throughput benchma
 Historical results, not remeasured while preparing this documentation:
 
 ```text
-Best stable 4 GiB sequential-read configuration: approximately 3.919 GiB/s
-4K random reads: approximately 22,137 IOPS, 45.156 us
+Complete 4 GiB sequential read: 2.562087 GiB/s
+-x 0 -w 1 -i 4M -I 0, TRACE logging enabled, 1024 complete reads
 ```
 
-These results depend on the Samsung 990 PRO, PCIe topology, thread count, and gdsio parameters. They are not performance guarantees for other machines.
+This value comes from `strict_4g_read.stdout` in the evidence directory in section 14. It is throughput during the tool's measured I/O time, excluding process initialization and teardown. It depends on the Samsung 990 PRO, PCIe topology, thread count, and gdsio parameters, and is not a performance guarantee for other machines.
 
 ## 12. Common failures
 
 | Symptom | Meaning |
 |---|---|
 | `checkIfAllGPUsSupportP2PDMA(): 0` | GPU BAR1/P2P, IOMMU, topology, or driver requirements are still unmet |
-| `CUDA P2P address errornum: 801` | GPU P2P address mapping or eligibility checks failed |
-| `cuFile error 5001` | The strict cuFile path was not established; common causes involve nvidia-fs, file registration, or platform checks |
+| `CUDA P2P address errornum: 801` | `CUDA_ERROR_NOT_SUPPORTED`; here, obtaining a P2P address is unsupported. Inspect driver capabilities and surrounding logs |
+| `cuFile error 5001` | `CU_FILE_DRIVER_NOT_INITIALIZED`; inspect initialization and P2PDMA path-selection logs. It is not a generic code for all file-registration errors |
 | `NVMe P2PDMA: Unsupported` | The target NVMe P2PDMA path did not pass eligibility checks |
 | `mount option not found` | The reference root mount does not show `data=ordered` in the actual mount table |
-| `use_compat_mode=true` | This is not a validated direct-I/O result; CPU/compatibility fallback may be active |
+| `use_compat_mode=true` | Compatibility fallback is allowed, so this does not meet the strict configuration. An actual `compat: 1` I/O uses that path |
 | gdsio exits with code 0 but prints errors | Inspect the output; do not rely on the exit code alone |
 
-The reference troubleshooting order is: actual `/proc/cmdline` → actual root mount options → multipath → RegistryDwords → GPU UUID/BDF and NVMe BDF → gdscheck output → gdsio logs. Do not stack additional unvalidated driver parameters on top of an unresolved configuration.
+Error definitions are in the [CUDA Driver API](https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html) and [cuFile API](https://docs.nvidia.com/gpudirect-storage/api-reference-guide/index.html#enumerations). The reference troubleshooting order is: actual `/proc/cmdline` → actual root mount options → multipath → RegistryDwords → GPU UUID/BDF and NVMe BDF → gdscheck output → gdsio logs. Do not stack additional unvalidated driver parameters on top of an unresolved configuration.
 
 ## 13. Rollback
 

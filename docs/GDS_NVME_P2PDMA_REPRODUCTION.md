@@ -7,7 +7,7 @@
 
 ## 阅读前：这篇文档能完成什么？
 
-**本文是已验证环境的配置与验收参考，不是单篇从零安装教程，也不保证任意 CMP 机器照抄后就能开启 NVMe GDS。**
+本文说明参考机器如何配置并验收 Samsung 990 PRO → GPU 的 NVMe P2PDMA 路径。它从已具备驱动和 GDS 工具的环境开始；**驱动、CUDA/cuFile 和 GDS 的从零安装不在本文范围内**。
 
 | 当前环境 | 应如何使用本文 |
 |---|---|
@@ -15,17 +15,11 @@
 | 尚未安装 CUDA/cuFile 或 GDS 工具 | 先完成相应安装；本文后面的命令默认 `gdscheck.py`、`gdsio` 已可用 |
 | CMP 尚未具备所需的 BAR1/P2P 能力 | 先完成驱动适配；只复制本文参数或安装公开 cmpunlocker，不能保证复现参考机器 |
 
-本文尚未提供逐步的驱动/CUDA/GDS 安装流程，也不分发参考机器额外的 CMP 驱动 overlay（本地补丁）。该补丁与公开 cmpunlocker 不完全相同，具体差异见 [CMP P2P 部署参考](CMP_P2P.md)。已有原生支持或通过其他方式实现相同能力的机器无需使用相同补丁。
+参考机器使用额外的 CMP 驱动 overlay（本地补丁），本仓库不分发它；它与公开 cmpunlocker 的差异见 [CMP P2P 部署参考](CMP_P2P.md)。已有原生支持或通过其他方式满足 [主机验收条件](从零部署.md#主机验收条件) 的机器无需使用相同补丁。
 
-从零准备时，可先查阅 [CUDA Linux 安装指南](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) 和 [GDS 安装与排障指南](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html)。按操作系统、驱动和目标 GDS 路径选择匹配版本；这些官方资料不包含本机 CMP 的额外适配，不能代替它。本文记录的是 CUDA 13.0 GDS 参考环境，官方当前版本可能不同。
+安装入口见 [CUDA Linux 安装指南](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/) 和 [GDS 安装与排障指南](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html)。按操作系统、驱动和目标路径选择匹配版本；这些资料不包含本机 CMP 适配。历史验证使用 CUDA 13.0、GDS `1.15.1.6`、libcufile `2.12`，当前官方文档可能对应其他版本。
 
-主机须具备相应的驱动和内核支持；执行测试的环境（主机或容器）须能使用 CUDA/cuFile、`gdscheck.py` 和 `gdsio`，并访问目标 GPU 与数据文件。容器内有这些工具，不代表主机已经具备直通能力。完成准备后，从下方前置检查开始，最终以禁止 CPU compatibility fallback 时的实际读入与数据校验结果为准。
-
-本文根据项目原有 GDS 复现记录整理，已替换设备 UUID，并调整配置备份、恢复及先写入测试数据再校验读取的示例。驱动层 P2P 项目与版本说明见 [CMP P2P 部署参考](CMP_P2P.md)。以下系统配置属于特定参考环境，需要按目标机器逐项核对；本项目启动器不会执行这些修改。
-
-本文的 IOMMU、NVMe multipath、ext4 和 BAR1 设置，以及后文的门禁检查，均针对下述参考路径。其他机器不要求逐项相同，应根据自己的硬件与驱动选择配置，并满足 [主机验收条件](从零部署.md#主机验收条件)；机器专用补丁不是 vLLM 部署的必需依赖。
-
-**硬件与接线见 [参考硬件与 PCIe 拓扑](REFERENCE_HARDWARE.md)**：本机没有使用 PCIe switch 连接 SSD 和 GPU，990 PRO 与读盘卡位于不同 CPU 根端口。先确认数据所在盘和拓扑，再判断后面的参考配置是否适用。
+主机须提供相应的驱动和内核支持；测试环境（主机或容器）须能使用上述工具并访问目标 GPU 与数据文件。先按 [参考硬件与 PCIe 拓扑](REFERENCE_HARDWARE.md) 确认数据盘和读盘卡，再做前置检查。下面的 IOMMU、multipath、ext4 和 BAR1 设置属于参考路径，按需核对和修改；已具备相应能力的环境可直接进入第 9 节严格验证准备。本项目启动器不会修改这些系统配置。
 
 ## 数据路径与适用范围
 
@@ -44,13 +38,10 @@ PCIP2PDMACapable:1
 checkIfAllGPUsSupportP2PDMA(): 1
 NVMe P2PDMA: Supported
 cuFile using NVME P2PDMA mode
-use_compat_mode=false
+properties.use_compat_mode : false
 ```
 
 仅仅 `gdscheck.py` 返回退出码 0、或 compatibility 模式读写成功，都不能证明直通成功。
-
-这套流程是 CMP170HX 定制环境上的实测方案，不是适用于所有 NVIDIA GPU 的通用解锁方案。
-不要直接复制驱动、固件、VBIOS 或 cmpunlocker；先确认 GPU UUID、PCI BDF、NVMe BDF 和拓扑。
 
 ## 1. 前置检查
 
@@ -173,15 +164,16 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet splash amdgpu.dc=0 amd_iommu=off iommu=off pci
 options nvme_core multipath=N
 ```
 
-然后检查文件确实进入 initramfs：
+重新生成 initramfs，并检查配置文件已收录：
 
 ```bash
 sudo update-initramfs -u -k "$(uname -r)"
+sudo lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -F 'etc/modprobe.d/nvme.conf'
 ```
 
 ## 6. 让 ext4 根挂载进入 ordered data mode
 
-在该 ext4 根文件系统的实测环境中，cuFile 文件注册要求实际挂载选项显示 `data=ordered`。当目标 NVMe 数据位于根文件系统时，在 GRUB 内加入：
+在该 ext4 根文件系统的实测环境中，cuFile 文件注册要求实际挂载选项显示 `data=ordered`；这也符合 [NVIDIA 的 ext4 挂载要求](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html#mounting-a-local-file-system-for-gds)。当目标 NVMe 数据位于根文件系统时，在 GRUB 内加入：
 
 ```text
 rootflags=data=ordered
@@ -230,7 +222,11 @@ nvme multipath:      N
 /sys/class/iommu:    空目录或无 AMD IOMMU 实例
 ```
 
-同时确认 NVIDIA RegistryDwords 的实际值包含：
+读取 NVIDIA 模块实际参数，并确认 RegistryDwords 包含下列值：
+
+```bash
+grep -E 'EnableResizableBar|RegistryDwords' /proc/driver/nvidia/params
+```
 
 ```text
 RMForceStaticBar1=1;RMPcieP2PType=1;RmForceDisableIomapWC=1
@@ -247,7 +243,8 @@ RMForceStaticBar1=1;RMPcieP2PType=1;RmForceDisableIomapWC=1
   },
   "properties": {
     "use_pci_p2pdma": true,
-    "allow_compat_mode": false
+    "allow_compat_mode": false,
+    "force_compat_mode": false
   },
   "block": {
     "nvme": {
@@ -263,30 +260,34 @@ RMForceStaticBar1=1;RMPcieP2PType=1;RmForceDisableIomapWC=1
 export CUFILE_ENV_PATH_JSON=/path/to/strict-p2pdma.json
 export CUFILE_USE_PCIP2PDMA=1
 export CUFILE_ALLOW_COMPAT_MODE=0
+unset CUFILE_FORCE_COMPAT_MODE
 export CUFILE_LOGGING_LEVEL=TRACE
+GDS_LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gds-p2pdma-logs.XXXXXX")
 ```
 
-以 JSON 中的 `allow_compat_mode=false` 及实际日志为准；仅设置环境变量或看到进程正常退出，不能排除 CPU compatibility fallback。
+以生效配置和实际 I/O 日志为准；仅设置环境变量或看到进程正常退出，不能排除 CPU compatibility fallback。下面通过 `CUFILE_LOGFILE_PATH` 为每条命令保存独立日志；未指定日志目录或路径时，日志通常在应用当前工作目录，并非固定为 `/var/log/cufile.log`。参见 [NVIDIA 日志与环境变量说明](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html#environment-variables-used-by-gpudirect-storage)。
 
 ## 10. 严格验证
 
-下面 `-d 0` 指测试进程所见的 CUDA 设备 0，不一定是主机 `nvidia-smi` 的 GPU 0。核对 `CUDA_VISIBLE_DEVICES` 和测试输出中的 GPU UUID/BDF，确保测的是准备承担读盘的卡；只测另一张卡不能验收当前路径。工具路径按实际 CUDA/GDS 安装位置替换。
+下面 `-d 0` 指测试进程所见的 CUDA 设备 0，不一定是主机 `nvidia-smi` 的 GPU 0。核对 `CUDA_VISIBLE_DEVICES` 和 cuFile 日志中的 GPU BDF，确保测的是准备承担读盘的卡；日志可能用十进制表示总线号，例如 `197` 对应 `c5`。`-m 0` 使用 CUDA 显存分配，`-x 0` 选择同步 GDS I/O。工具路径按实际 CUDA/GDS 安装位置替换。
 
 先运行平台检查：
 
 ```bash
-/usr/local/cuda-13.0/gds/tools/gdscheck.py -p
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/gdscheck.cufile.log" \
+  /usr/local/cuda-13.0/gds/tools/gdscheck.py -p
 ```
 
-不要只看退出码，要检查输出内容是否包含：
+先检查平台摘要中的 NVMe P2PDMA 支持与生效配置；参考版本输出如下（空格可能不同）：
 
 ```text
-PCIP2PDMACapable:1
-checkIfAllGPUsSupportP2PDMA(): 1
 NVMe P2PDMA: Supported
-cuFile using NVME P2PDMA mode
+properties.use_compat_mode : false
+properties.force_compat_mode : false
 IOMMU: disabled
 ```
+
+`PCIP2PDMACapable:1`、`checkIfAllGPUsSupportP2PDMA(): 1` 和 `cuFile using NVME P2PDMA mode` 在本版工具的 cuFile 日志中，不要求平台摘要重复打印。平台检查仍不能代替目标文件的实际 I/O。
 
 然后在确认位于目标 NVMe ext4 挂载点的目录中做 64 MiB 数据校验。下面的路径只是示例，
 不要把测试文件放到 tmpfs：
@@ -296,34 +297,37 @@ TEST_DIR=/path/on/the-target-nvme-ext4
 TEST_FILE="$TEST_DIR/gds-test-64m-$(date +%Y%m%d-%H%M%S).bin"
 
 # 先写入带校验模式的数据；-I 1 -V 会写入后读取校验。
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/write-64m.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_FILE" \
   -d 0 -m 0 -w 1 -s 64M -o 0 -i 4M -x 0 -I 1 -V
 
 # 再单独验证 SSD 到 GPU 的读取，复用相同尺寸与偏移。
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/read-64m.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_FILE" \
   -d 0 -m 0 -w 1 -s 64M -o 0 -i 4M -x 0 -I 0 -V
 ```
 
-同时检查本次测试实际写入的 cuFile 日志；下面是默认路径示例，容器内路径可能不同，应核对配置和时间戳，避免读取历史日志：
+每条命令都应正常退出；若写入或校验失败，先解决错误，再运行下一条。`-V` 的读校验要求文件先以同样的线程数、尺寸、偏移和校验模式写入，见 [NVIDIA gdsio 参数说明](https://docs.nvidia.com/gpudirect-storage/configuration-guide/index.html#gdsio-utility)。保留 stdout/stderr，并检查本次读取的日志：
 
 ```bash
-rg -n "P2PDMA|compat|bounce|5001|801|POSIX" /var/log/cufile.log
+grep -nEi 'P2PDMA|p2p chunk read|compat|bounce|errno|5001|801|POSIX' \
+  "$GDS_LOG_DIR/read-64m.cufile.log"
 ```
 
-必须满足：
+验收时同时核对：
 
-```text
-NVMe P2PDMA: Supported
-use_compat_mode=false
-数据校验成功
-无 error 801
-无 cuFile 5001
-无 POSIX/bounce payload fallback
-```
+| 证据 | 本例预期 |
+|---|---|
+| gdsio 读摘要 | `DataSetSize: 65536/65536(KiB)`，`ops: 16`；无短读、I/O 错误或数据不匹配 |
+| 本次 cuFile 读日志 | 成功注册文件；16 次 `cuFile p2p chunk read`，每次 4 MiB、`errno: 0` |
+| 实际传输路径 | `p2p mode: 1`、`compat: 0`、`bounce-buffer ptr 0`；无 CPU/POSIX 数据中转 |
+| 错误检查 | 无 CUDA 801、cuFile 5001 或其他传输错误 |
 
-如果输出只有 `NVMe: Unsupported`，但同时有 `NVMe P2PDMA: Supported`，要看清楚：前者通常
+`gdsio -V` 成功时不一定打印单独的“数据校验成功”提示，需结合完整传输和无校验失败判断。日志中的 POSIX 内存池初始化或包含 `bounce buffer` 的路由消息本身也不表示发生了回退；本机成功日志中就有这些行，应检查每次 I/O 的实际路径。以上是参考版本的格式，其他版本应检查等价证据。
+
+如果输出有 `NVMe: Unsupported`，但同时有 `NVMe P2PDMA: Supported`，要看清楚：前者通常
 描述传统 nvidia-fs 路径，后者才是本流程使用的 NVMe P2PDMA 路径。`nvidia-fs` 不加载并不
 自动表示本流程失败。
 
@@ -332,10 +336,12 @@ use_compat_mode=false
 功能校验通过后再测吞吐，不要把吞吐测试当作首次功能验证：
 
 ```bash
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/write-4g.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_DIR/gds-throughput-4g.bin" \
   -d 0 -m 0 -w 1 -s 4G -o 0 -i 4M -x 0 -I 1 -V
 
+CUFILE_LOGFILE_PATH="$GDS_LOG_DIR/read-4g.cufile.log" \
 /usr/local/cuda-13.0/gds/tools/gdsio \
   -f "$TEST_DIR/gds-throughput-4g.bin" \
   -d 0 -m 0 -w 1 -s 4G -o 0 -i 4M -x 0 -I 0
@@ -344,25 +350,25 @@ use_compat_mode=false
 历史记录中的结果（本次文档整理未重新测量）：
 
 ```text
-4 GiB 顺序读取最佳稳定配置：约 3.919 GiB/s
-4K 随机读取：约 22,137 IOPS，45.156 us
+完整 4 GiB 顺序读取：2.562087 GiB/s
+-x 0 -w 1 -i 4M -I 0，TRACE 日志开启，1024 次完整读取
 ```
 
-这是 Samsung 990 PRO、PCIe 拓扑、线程数和 gdsio 参数下的结果，不是所有机器的承诺值。
+该数值来自第 14 节证据目录的 `strict_4g_read.stdout`，是工具报告的 I/O 时间内吞吐，不含进程初始化和退出。测试依赖 Samsung 990 PRO、PCIe 拓扑、线程数和 gdsio 参数，不是其他机器的承诺值。
 
 ## 12. 常见失败解释
 
 | 现象 | 含义 |
 |---|---|
 | `checkIfAllGPUsSupportP2PDMA(): 0` | GPU BAR1/P2P、IOMMU、拓扑或驱动参数仍未满足 |
-| `CUDA P2P address errornum: 801` | GPU P2P 地址映射/资格检查失败 |
-| `cuFile error 5001` | strict cuFile 路径未建立，常见于 nvidia-fs/文件注册/平台门禁问题 |
+| `CUDA P2P address errornum: 801` | `CUDA_ERROR_NOT_SUPPORTED`；此上下文中获取 P2P 地址的操作不受支持，需查驱动能力和相邻日志 |
+| `cuFile error 5001` | `CU_FILE_DRIVER_NOT_INITIALIZED`；检查初始化及 P2PDMA 选路日志，不能将其泛指所有文件注册错误 |
 | `NVMe P2PDMA: Unsupported` | 目标 NVMe P2PDMA 资格未通过 |
 | `mount option not found` | 根盘没有以 `data=ordered` 出现在实际挂载表中 |
-| `use_compat_mode=true` | 不是直通结果，可能走了 CPU/compat fallback |
+| `use_compat_mode=true` | 允许 compatibility fallback，未满足本文严格配置；实际 `compat: 1` 表示本次 I/O 使用该路径 |
 | gdsio 退出 0 但输出有错误 | 以输出内容为准，不能只信退出码 |
 
-参考环境排查顺序是：确认实际 `/proc/cmdline` → 实际根挂载选项 → multipath → RegistryDwords
+错误码定义见 [CUDA Driver API](https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html) 与 [cuFile API](https://docs.nvidia.com/gpudirect-storage/api-reference-guide/index.html#enumerations)。参考环境排查顺序是：确认实际 `/proc/cmdline` → 实际根挂载选项 → multipath → RegistryDwords
 → GPU UUID/BDF 与 NVMe BDF → gdscheck 内容 → gdsio 日志。不要一次叠加更多未经验证的驱动参数。
 
 ## 13. 回滚

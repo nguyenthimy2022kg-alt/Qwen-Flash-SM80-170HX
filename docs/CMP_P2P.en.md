@@ -8,7 +8,7 @@ The upstream commit reviewed on 2026-09-08 was [`aaddfd4ce84a2804a7e0cd332acc4c2
 
 ## Scope
 
-The host must meet the [deployment requirements](DEPLOYMENT.en.md#requirements). cmpunlocker and the local overlay described below are adaptations used on the reference machine, not mandatory vLLM dependencies. A machine with working P2P/GDS does not need the same patches. Choose an implementation appropriate for the hardware and validate actual data transfers and model execution.
+The host must meet the [host acceptance criteria](DEPLOYMENT.en.md#host-acceptance-criteria). cmpunlocker and the local overlay described below are adaptations used on the reference machine, not mandatory vLLM dependencies. A machine with working P2P/GDS does not need the same patches. Choose an implementation appropriate for the hardware and validate actual data transfers and model execution.
 
 There is no PCIe switch on this machine’s GPU/SSD paths. See [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md) for the CPU, motherboard, SSD, root-port layout, and reading-GPU selection.
 

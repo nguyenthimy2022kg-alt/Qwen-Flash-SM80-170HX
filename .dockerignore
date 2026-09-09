@@ -7,3 +7,16 @@ config/local*.json
 runs
 .cache
 .venv-hf/
+# Keep local secrets, weights, samples and build outputs out of COPY .
+.env
+.env.*
+**/.env
+**/.env.*
+*.pt
+**/*.pt
+*.safetensors
+**/*.safetensors
+*.whl
+**/*.whl
+*.so
+**/*.so

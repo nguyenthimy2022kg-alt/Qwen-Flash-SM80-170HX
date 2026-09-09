@@ -72,6 +72,32 @@ class ModelCheckTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "MTP 张量必须为 BF16"):
                 check_model.inspect_checkpoint(root, self.checkpoint(root, "F32"))
 
+    def test_malformed_tensor_header_is_rejected_with_tensor_name(self):
+        cases = [
+            ("data_offsets", [0.5, 160.5]),
+            ("data_offsets", [False, 160]),
+            ("data_offsets", [0]),
+            ("shape", {"rows": 1, "columns": 160}),
+            ("shape", [True, 160]),
+            ("dtype", "UNKNOWN"),
+            ("dtype", None),
+        ]
+        for field, value in cases:
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                source = self.checkpoint(root)
+                shard = root / "model.safetensors"
+                data = shard.read_bytes()
+                header_size = struct.unpack("<Q", data[:8])[0]
+                header = json.loads(data[8:8 + header_size])
+                name = "model.ple.ngram_embedding.shard_0.weight"
+                header[name][field] = value
+                encoded = json.dumps(header).encode()
+                shard.write_bytes(struct.pack("<Q", len(encoded)) + encoded + data[8 + header_size:])
+                source["indexed_safetensors_bytes"] = shard.stat().st_size
+                with self.assertRaisesRegex(ValueError, f"shard_0.weight.*{field}"):
+                    check_model.inspect_checkpoint(root, source)
+
 
 if __name__ == "__main__":
     unittest.main()

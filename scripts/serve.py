@@ -1,29 +1,65 @@
 #!/usr/bin/env python3
 """启动、停止社区运行包；仅操作带有本项目标签的容器。"""
 from pathlib import Path
-import argparse,ctypes,json,os,re,subprocess as sp,sys,time,datetime
+import argparse,ctypes,json,math,re,subprocess as sp,sys,time,datetime
 ROOT=Path(__file__).resolve().parents[1]
 LABEL='qwen-flash-sm80.managed'
 
 def read_config(path):
-    c=json.loads(path.read_text())
+    try:
+        c=json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise ValueError(f'配置文件不存在：{path}；请复制 config/example.json 并填写本机配置') from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f'配置文件 JSON 无效：{path}（{exc}）') from exc
+    if not isinstance(c,dict):raise ValueError('配置文件必须为 JSON 对象')
     for field in ('models_root','model_subdir','ple_artifact','cufile_config','ple_identity','image'):
         if not isinstance(c.get(field),str) or not c[field].strip():
             raise ValueError(f'{field} 必须填写非空字符串')
+    if c.get('validation_dir') is not None and (not isinstance(c['validation_dir'],str) or not c['validation_dir'].strip()):
+        raise ValueError('validation_dir 必须为非空路径字符串或 null')
+    if type(c.get('port')) is not int or not 1024<=c['port']<=65535:
+        raise ValueError('port 必须为 1024～65535 之间的整数')
+    if c.get('mode') not in ('tep2','tp2'):raise ValueError('mode 仅支持 tep2 / tp2')
+    gpu_ids=c.get('gpu_ids')
+    if not isinstance(gpu_ids,list) or len(gpu_ids)!=2 or any(
+            not ((type(gpu) is int and gpu>=0) or (isinstance(gpu,str) and gpu.strip())) for gpu in gpu_ids):
+        raise ValueError('gpu_ids 必须为两个 GPU 编号或完整 UUID 组成的数组')
+    c['gpu_ids']=[str(gpu).strip() for gpu in gpu_ids]
+    if len(set(c['gpu_ids']))!=2:raise ValueError('gpu_ids 需要两张不同的显卡')
+    for field in ('container_memory_gib','container_memory_and_swap_gib','min_host_available_gib'):
+        value=c.get(field)
+        if type(value) not in (int,float) or not math.isfinite(value) or value<=0:
+            raise ValueError(f'{field} 必须为有限正数')
+    if c['container_memory_gib']>c['container_memory_and_swap_gib']:
+        raise ValueError('container_memory_and_swap_gib 不能小于 container_memory_gib')
+    if not isinstance(c.get('draft_int8'),bool):raise ValueError('draft_int8 必须为布尔值')
+    guard=c.get('core_offset_guard')
+    if guard is not None and (not isinstance(guard,dict) or
+            not isinstance(guard.get('gpu_uuid'),str) or not guard['gpu_uuid'].strip() or
+            type(guard.get('expected')) is not int):
+        raise ValueError('core_offset_guard 必须为 null 或包含 gpu_uuid 字符串、expected 整数的对象')
     for field in ('models_root','ple_artifact','cufile_config','ple_identity','validation_dir'):
         if c.get(field):
             p=Path(c[field]).expanduser()
             c[field]=str((ROOT/p).resolve() if not p.is_absolute() else p.resolve())
-    if not 1024<=c['port']<=65535:raise ValueError('端口必须在 1024～65535')
-    if c['mode'] not in ('tep2','tp2'):raise ValueError('仅支持 tep2 / tp2')
-    if len(c['gpu_ids'])!=2 or len(set(c['gpu_ids']))!=2:raise ValueError('需要两张不同的显卡')
     if Path(c['model_subdir']).is_absolute() or '..' in Path(c['model_subdir']).parts:raise ValueError('model_subdir 必须位于 models_root 内')
-    if not 0<c['container_memory_gib']<=c['container_memory_and_swap_gib']:raise ValueError('内存与含交换空间上限无效')
-    if c['min_host_available_gib']<=0:raise ValueError('主机可用内存保护必须为正值')
-    if not isinstance(c['draft_int8'],bool):raise ValueError('draft_int8 必须为布尔值')
     for f in ('models_root','ple_artifact','cufile_config','ple_identity','validation_dir'):
         if c.get(f) and (':' in c[f] or '\n' in c[f]):raise ValueError('挂载路径不能含冒号或换行')
     return c
+
+def check_docker(c,name):
+    try:
+        result=sp.run(['docker','info','--format','{{.ServerVersion}}'],capture_output=True,text=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError('未找到 Docker 命令；请先安装 Docker 并配置当前用户的访问权限') from exc
+    if result.returncode:
+        raise RuntimeError('无法访问 Docker 服务；请检查 Docker 是否运行及当前用户权限：'+result.stderr.strip())
+    result=sp.run(['docker','image','inspect','--format','{{.Id}}','--',c['image']],capture_output=True,text=True)
+    if result.returncode:
+        raise RuntimeError(f"无法读取本地镜像 {c['image']}；请先按部署指南构建镜像（启动器不会自动拉取）："+result.stderr.strip())
+    result=sp.run(['docker','container','inspect','--',name],capture_output=True,text=True)
+    if result.returncode==0:raise RuntimeError('同名容器已存在，请换名')
 
 def check_paths(c):
     for field,path in [('models_root',Path(c['models_root'])),
@@ -90,8 +126,8 @@ def available_gib():
 def inspect(name):return json.loads(sp.check_output(['docker','inspect',name]))[0]
 def stop(name):
     info=inspect(name)
-    if info['Config'].get('Labels',{}).get(LABEL)!='1':raise RuntimeError('拒绝停止不属于本项目的容器')
-    sp.run(['docker','stop','-t','20',name],check=True)
+    if (info['Config'].get('Labels') or {}).get(LABEL)!='1':raise RuntimeError('拒绝停止不属于本项目的容器')
+    sp.run(['docker','stop','-t','20',info['Id']],check=True)
 
 def supervise(run):
     c=json.loads((run/'config.json').read_text());cmd=json.loads((run/'command.json').read_text());name=cmd[cmd.index('--name')+1];started=False
@@ -123,17 +159,25 @@ def main():
     if args.action=='stop':stop(args.name);return
     if args.action=='_supervise':supervise(args.run);return
     c=read_config(args.config);name=args.name or 'qwen-flash-sm80-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]+',name):raise ValueError('容器名称无效')
+    if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]*',name):raise ValueError('容器名称无效')
     if not args.dry_run:check_paths(c)
     run=ROOT/'runs'/name;cmd=build_command(c,name,run,gpu_inventory())
     if args.dry_run:print(json.dumps(cmd,ensure_ascii=False,indent=2));return
     check_offset(c.get('core_offset_guard'))
     if available_gib()<c['min_host_available_gib']:raise RuntimeError('主机可用内存不足')
-    if sp.run(['docker','inspect',name],stdout=sp.DEVNULL,stderr=sp.DEVNULL).returncode==0:raise RuntimeError('同名容器已存在，请换名')
+    check_docker(c,name)
     run.mkdir(parents=True,exist_ok=False);(run/'service').mkdir();(run/'cache').mkdir()
     (run/'command.json').write_text(json.dumps(cmd,indent=2));(run/'config.json').write_text(json.dumps(c,indent=2))
     with (run/'supervisor.log').open('w') as log:
         proc=sp.Popen([sys.executable,str(Path(__file__).resolve()),'_supervise',str(run)],stdout=log,stderr=sp.STDOUT,start_new_session=True)
     print(json.dumps({'容器':name,'地址':f"http://127.0.0.1:{c['port']}",'日志':str(run),'监控进程':proc.pid,'状态':'启动已提交，请通过日志确认就绪'},ensure_ascii=False,indent=2))
 
-if __name__=='__main__':main()
+def cli():
+    try:
+        main()
+    except (OSError,ValueError,RuntimeError,sp.CalledProcessError) as exc:
+        print(f'错误：{exc}',file=sys.stderr)
+        return 1
+    return 0
+
+if __name__=='__main__':sys.exit(cli())
