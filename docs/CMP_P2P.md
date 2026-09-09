@@ -2,7 +2,7 @@
 
 **简体中文** | [English](CMP_P2P.en.md)
 
-本项目参考环境的 GPU P2P 支持使用 [qg19932GH/cmpunlocker](https://github.com/qg19932GH/cmpunlocker)。该项目运行在驱动层，独立于 vLLM；本仓库不包含其驱动补丁，也不会在镜像构建或服务启动时自动安装。
+本项目参考环境的 GPU P2P 支持使用 [qg19932GH/cmpunlocker](https://github.com/qg19932GH/cmpunlocker)。该项目运行在驱动层，独立于 vLLM；本仓库现在提供单独的 [BAR1/P2P 参考补丁](../drivers/cmp-bar1/README.md)，不会在镜像构建或服务启动时自动安装。
 
 2026-09-08 核查的上游提交为 [`aaddfd4ce84a2804a7e0cd332acc4c26c79063d9`](https://github.com/qg19932GH/cmpunlocker/tree/aaddfd4ce84a2804a7e0cd332acc4c26c79063d9)。这是文档审查版本，**尚未核实它是否等于参考机器最初安装驱动时使用的提交**。
 
@@ -30,7 +30,9 @@
 
 参考机器的驱动构建脚本还使用 `driver/local-src`、`driver/local-patches`，包括 `0011-p2p-bar1.patch`、`0013-skip-mailbox-peer-preinit.patch`、`0015-bar1p2p-readcap-override.patch` 等。这些本地 overlay 目录不存在于上面审查的外部提交中，不能将两者视为完全相同的驱动版本。
 
-本仓库不分发该机器专用的驱动 overlay，也不要求部署者取得它。上面的差异用于说明参考环境来源；目标是实现所需的 P2P/GDS 能力，而非复刻这套驱动。尚未满足条件的 CMP 机器仍需根据自身硬件完成适配。
+本仓库已将 BAR1/P2P 增量补丁整理到 [drivers/cmp-bar1](../drivers/cmp-bar1/README.md)，提供固定公开源码、校验、构建、手动安装与恢复说明。整理版不携带本机超频配置，也不等同于正在运行的完整 v0.3 驱动；平台读取能力覆盖需显式选择。旧补丁的同 switch 假设已经修正，当前参考拓扑仍以 H12D 实测为准。
+
+先运行 `python3 scripts/check-gds-host.py --data-path /实际的/PLE目录` 获取只读环境清单；脚本不进行传输验收，也不会修改驱动或系统配置。
 
 ## 外部项目的配置差异
 

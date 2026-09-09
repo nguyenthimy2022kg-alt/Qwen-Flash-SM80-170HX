@@ -1,0 +1,30 @@
+name: 可选 CMP 驱动参考构建
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'drivers/cmp-bar1/**'
+      - '.github/workflows/driver-reference.yml'
+permissions:
+  contents: read
+jobs:
+  compile-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential linux-headers-$(uname -r)
+      - name: 验证默认及平台覆盖两条补丁路径
+        run: |
+          python3 drivers/cmp-bar1/prepare.py --output "$RUNNER_TEMP/cmp-default"
+          python3 drivers/cmp-bar1/prepare.py --output "$RUNNER_TEMP/cmp-override" --allow-topology-override
+      - name: 编译平台覆盖版本（不安装、不加载）
+        run: |
+          make -C "$RUNNER_TEMP/cmp-override" -j2 modules SYSSRC="/lib/modules/$(uname -r)/build"
+          for module in nvidia nvidia-modeset nvidia-uvm nvidia-drm nvidia-peermem; do
+            test -s "$RUNNER_TEMP/cmp-override/kernel-open/$module.ko"
+            modinfo -F version "$RUNNER_TEMP/cmp-override/kernel-open/$module.ko"
+          done

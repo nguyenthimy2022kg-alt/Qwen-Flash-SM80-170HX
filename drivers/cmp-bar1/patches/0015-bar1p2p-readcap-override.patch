@@ -1,0 +1,30 @@
+Derived from local 0015; rebased 2026-09-08 on pinned public cmpunlocker.
+Removed obsolete Xeon/switch claims and dependency on a debug-only log hunk.
+Same CMP read-capability override; applied only with explicit opt-in.
+See ../NOTICE.md.
+
+--- a/src/nvidia/src/kernel/platform/p2p/p2p_caps.c
++++ b/src/nvidia/src/kernel/platform/p2p/p2p_caps.c
+@@ -669,6 +669,22 @@
+         NV_PRINTF(LEVEL_INFO, "Unrecognized CPU. Read Cap is disabled\n");
+     }
+ 
++    // Optional CMP platform override. This does not detect or create a common
++    // PCIe switch. The reference H12D/EPYC host uses separate root ports;
++    // actual peer transfers and data integrity must be validated per host.
++    // Apply this patch only when explicitly selecting the platform override.
++    {
++        NvU32 cmpDevId = pGpu->idInfo.PCIDeviceID >> 16;
++        if (((cmpDevId == 0x20C2) || (cmpDevId == 0x2082)) &&
++            (*pP2PReadCapStatus != NV0000_P2P_CAPS_STATUS_OK))
++        {
++            NV_PRINTF(LEVEL_ERROR,
++                      "CMPUNLOCK_BAR1P2P: platform read capability override for CMP 0x%x\n",
++                      cmpDevId);
++            *pP2PReadCapStatus = NV0000_P2P_CAPS_STATUS_OK;
++        }
++    }
++
+     return NV_OK;
+ }
+ 

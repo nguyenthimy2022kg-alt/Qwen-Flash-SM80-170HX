@@ -44,7 +44,7 @@
 | 2. 准备模型 | 下载固定检查点，检查完整性，转换并登记 PLE 数据 | [模型与数据准备](docs/从零部署.md#1-下载源码与模型) |
 | 3. 构建并启动 | 填写路径与 GPU 顺序，构建镜像，启动并等待就绪 | [配置与启动](docs/从零部署.md) |
 
-GDS 文档是参考配置与验证指南，包含安装资料入口；不提供参考机器额外的 CMP 驱动补丁。已有可用 P2P/GDS 的主机无需复制相同驱动设置。参考机器没有使用 PCIe switch 连接 SSD 与显卡，当前由一张卡直读，再广播给另一张卡。
+GDS 文档提供配置与验证步骤；需要 CMP 驱动适配时，可使用单独整理的 [BAR1/P2P 参考补丁与构建指南](drivers/cmp-bar1/README.md)，先运行 [只读环境检查](drivers/cmp-bar1/README.md#1-先检查选择是否需要适配)。已有可用 P2P/GDS 的主机无需复制相同驱动设置。参考机器没有使用 PCIe switch 连接 SSD 与显卡，当前由一张卡直读，再广播给另一张卡。
 
 完成主机和数据准备后，在仓库根目录执行：
 
@@ -114,4 +114,4 @@ python3 scripts/serve.py stop --name "<容器名>"
 
 ## 致谢与许可
 
-感谢 vLLM、Qwen 模型实现、原 Qwen3.8-Flash-DGX 社区项目，以及 NVIDIA GDS、Marlin、Triton、TileLang 等项目。仓库保留引用源码的既有声明，项目代码采用 Apache-2.0；模型、CUDA/cuFile、容器与第三方依赖按各自许可证使用。详见[来源与许可](docs/来源与许可.md)。
+感谢 vLLM、Qwen 模型实现、原 Qwen3.8-Flash-DGX 社区项目，以及 NVIDIA GDS、Marlin、Triton、TileLang 等项目。仓库保留引用源码的既有声明，推理项目代码采用 Apache-2.0；可选 [CMP 驱动目录](drivers/cmp-bar1/NOTICE.md) 单独保留 GPL v2 与 NVIDIA 声明；模型、CUDA/cuFile、容器与第三方依赖按各自许可证使用。详见[来源与许可](docs/来源与许可.md)。

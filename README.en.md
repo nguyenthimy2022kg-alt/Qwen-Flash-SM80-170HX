@@ -46,7 +46,7 @@ Follow these stages in order. Full commands are in the [deployment guide](docs/D
 | 2. Prepare the model | Download and check the pinned checkpoint, then convert and enroll PLE data | [Model and data preparation](docs/DEPLOYMENT.en.md#1-download-source-and-model) |
 | 3. Build and start | Set paths and GPU order, build the image, then start and wait for readiness | [Configuration and startup](docs/DEPLOYMENT.en.md) |
 
-The GDS document is a configuration and validation reference with installation links; it does not supply the reference machine's additional CMP driver patches. A host with working P2P/GDS does not need identical driver settings. The reference SSD and GPUs are not behind a PCIe switch; one GPU reads the data and broadcasts it to the other.
+The GDS guide provides configuration and validation steps. CMP adaptation is available separately through the [BAR1/P2P reference patches and build guide](drivers/cmp-bar1/README.en.md); start with the [read-only host inventory](drivers/cmp-bar1/README.en.md#1-inspect-the-host-first). A host with working P2P/GDS does not need identical driver settings. The reference SSD and GPUs are not behind a PCIe switch; one GPU reads the data and broadcasts it to the other.
 
 Once the host and data are prepared, run from the repository root:
 
@@ -116,4 +116,4 @@ Results come from different stages and conditions and **must not be added or mul
 
 ## Acknowledgments and license
 
-Thanks to vLLM, Qwen, the original Qwen3.8-Flash-DGX community project, NVIDIA GDS, Marlin, Triton, TileLang, and their contributors. Existing source notices are preserved. Project code is licensed under Apache-2.0; model weights, CUDA/cuFile, containers, and third-party dependencies retain their respective licenses. See [LICENSE](LICENSE) and [source provenance and licensing details (Chinese)](docs/来源与许可.md).
+Thanks to vLLM, Qwen, the original Qwen3.8-Flash-DGX community project, NVIDIA GDS, Marlin, Triton, TileLang, and their contributors. Existing source notices are preserved. Inference project code is licensed under Apache-2.0; the optional [CMP driver directory](drivers/cmp-bar1/NOTICE.md) retains separate GPL v2 and NVIDIA notices; model weights, CUDA/cuFile, containers, and third-party dependencies retain their respective licenses. See [LICENSE](LICENSE) and [source provenance and licensing details (Chinese)](docs/来源与许可.md).

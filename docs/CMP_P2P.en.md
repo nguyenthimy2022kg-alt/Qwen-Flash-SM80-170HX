@@ -2,7 +2,7 @@
 
 [简体中文](CMP_P2P.md) | **English** · [Home](../README.en.md)
 
-The reference environment uses [qg19932GH/cmpunlocker](https://github.com/qg19932GH/cmpunlocker) for GPU P2P support. This operates at the driver layer, independently of vLLM. This repository does not include its driver patches or install them during image builds or service startup.
+The reference environment uses [qg19932GH/cmpunlocker](https://github.com/qg19932GH/cmpunlocker) for GPU P2P support. This operates at the driver layer, independently of vLLM. This repository now provides separate [BAR1/P2P reference patches](../drivers/cmp-bar1/README.en.md), never automatically installed during image builds or service startup.
 
 The upstream commit reviewed on 2026-09-08 was [`aaddfd4ce84a2804a7e0cd332acc4c26c79063d9`](https://github.com/qg19932GH/cmpunlocker/tree/aaddfd4ce84a2804a7e0cd332acc4c26c79063d9). This identifies the documentation review snapshot; **it has not been confirmed as the commit originally used to install the reference machine's driver**.
 
@@ -30,7 +30,9 @@ Read from the machine hosting the service on 2026-09-08:
 
 The reference driver build script also uses `driver/local-src` and `driver/local-patches`, including `0011-p2p-bar1.patch`, `0013-skip-mailbox-peer-preinit.patch`, and `0015-bar1p2p-readcap-override.patch`. These local overlay directories are not present in the external commit reviewed above. The two driver versions must not be treated as identical.
 
-This repository does not distribute the machine-specific overlay or require users to obtain it. These differences document the reference environment's provenance. The goal is working P2P/GDS capabilities, not duplication of this driver build. CMP machines that do not yet meet the requirements need adaptations suited to their own hardware.
+The BAR1/P2P additions are now packaged in [drivers/cmp-bar1](../drivers/cmp-bar1/README.en.md), with pinned public sources, verification, build, manual installation and recovery instructions. This extracted version excludes the host overclock configuration and is not identical to the running full v0.3 driver. The platform read-capability override requires explicit opt-in. Obsolete common-switch claims were corrected; the reference topology remains the measured H12D setup.
+
+Start with `python3 scripts/check-gds-host.py --data-path /actual/PLE/directory` for a read-only inventory. It does not perform transfer acceptance tests or modify drivers/system configuration.
 
 ## Differences in the external installer
 

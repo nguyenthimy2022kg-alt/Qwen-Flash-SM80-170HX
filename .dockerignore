@@ -20,3 +20,6 @@ runs
 **/*.whl
 *.so
 **/*.so
+
+# Optional host driver sources are not part of the inference image.
+drivers/
