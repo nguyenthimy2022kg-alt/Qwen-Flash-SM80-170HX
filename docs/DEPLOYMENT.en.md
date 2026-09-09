@@ -8,29 +8,22 @@ This guide covers model download, PLE conversion, image building, and service ac
 
 ## Requirements
 
-- Linux x86_64, Git, curl, Python 3.10 or newer with `venv` and pip, Docker, NVIDIA Container Toolkit, and a CUDA 13-compatible driver. The repository's data-preparation scripts use only the Python standard library; the download tool is installed in its own virtual environment.
+- Linux x86_64, Git, curl, Python 3.10 or newer with `venv` and pip, Docker, [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), and a CUDA 13-compatible driver. The repository's data-preparation scripts use only the Python standard library; the download tool is installed in its own virtual environment.
 - Validated hardware: two CMP 170HX GPUs, approximately 63.39 GiB VRAM each. Two 40 GB cards are not an equivalent configuration. Other GPUs have not undergone whole-model validation.
 - The reference host has approximately 32 GiB RAM and 8 GiB swap. Default container limits are 21 GiB RAM and 26 GiB RAM plus swap. Leave memory available for the host and other applications.
 - Model files total approximately 135.2 GB. Converted PLE data adds approximately 51.2 GB. Reserve at least 220 GB for data, plus separate space for Docker layers and compilation caches.
 - Working GPU P2P and strict GDS/cuFile reads on the target NVMe/filesystem/driver/topology. Direct-read data validation must pass; installing GDS alone does not establish that the path works. The supplied configuration disables host-staging fallback with `allow_compat_mode=false`.
 
-The [CMP P2P reference](CMP_P2P.en.md) and [GDS reproduction guide](GDS_NVME_P2PDMA_REPRODUCTION.en.md) describe the reference machine's configuration and validation. They are not standalone installers for a fresh host, and optional patches are now provided separately in the [CMP BAR1/P2P build guide](../drivers/cmp-bar1/README.en.md). Start with its read-only inventory and choose adaptations for your hardware. For host setup, also see the [NVIDIA GDS documentation](https://docs.nvidia.com/gpudirect-storage/) and [Container Toolkit installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
-
-See [reference hardware and PCIe topology](REFERENCE_HARDWARE.en.md): one EPYC 7532, two CMP 170HX GPUs, and a 990 PRO 4TB, with no PCIe switch on their paths.
-
 ## Host acceptance criteria
 
-| Check | Required outcome |
+Complete these two checks first. If both already work, proceed to step 1.
+
+| Requirement | Setup and pass condition |
 |---|---|
-| GPU and capacity | Two SM80 GPUs with sufficient VRAM for the model, MTP, cache, and workspaces; enough host RAM and disk space for loading |
-| Software and model | The pinned software stack, model revision, and PLE layout; model-file checks pass |
-| GPU P2P | Required peer-read/write capability and a successful peer-copy data check; a capability matrix alone is insufficient |
-| Direct SSD reads | Correct data reaches the GPU through this project's cuFile path with compatibility fallback disabled; data checks and logs establish that the payload is not staged through host RAM |
-| Model service | Loading and warmup complete, health checks pass, and an actual generation request succeeds |
+| GPU P2P | For CMP GPUs, use the [complete bayley/cmpunlocker BAR1/P2P implementation](https://github.com/bayley/cmpunlocker/tree/5a7bb4b7e5056306fe49e8b824787659abb19914). Follow its P2P setup instructions and verify actual transfers in both directions. No additional patch bundle from this repository is needed. |
+| Direct SSD-to-GPU reads | Follow the [GDS setup steps](GDS_NVME_P2PDMA_REPRODUCTION.en.md): install the tools, configure NVMe P2PDMA, and verify data with CPU fallback disabled. cmpunlocker does not replace this step. |
 
-Driver patches, BAR1, IOMMU, NVMe multipath, and filesystem settings depend on the target hardware and driver. A host that meets these conditions can proceed without cmpunlocker or the reference machine's local overlay. The default cuFile configuration uses NVMe P2PDMA; other supported GDS paths need their own configuration and the same strict direct-read validation.
-
-These are functional criteria, not a throughput guarantee or proof that other GPUs have been tested. Measure performance on the target hardware; whole-model validation currently covers only the documented reference machine.
+The reference host uses an H12D motherboard, one EPYC 7532, two CMP 170HX GPUs and a 990 PRO 4TB. The SSD and GPUs are **not behind a PCIe switch**. The SSD and reading GPU share a CPU PCIe root bus through separate root ports. The first GPU reads PLE data and broadcasts it to the second over P2P. See the [hardware diagram](REFERENCE_HARDWARE.en.md) when comparing slots.
 
 ## 1. Download source and model
 
@@ -124,24 +117,32 @@ PY
 
 Review `gpu_ids` in `config/local.json`. GPU indices default to `0` and `1`; full UUIDs are also accepted. The first GPU owns PLE reads, so choose the order with SSD/GPU topology in mind. Model, PLE, and identity paths must refer to the files prepared above. Paths in the configuration resolve relative to the repository root. Model symlinks must remain accessible through the `/models` mount; mount their common parent directory when necessary.
 
-| Setting | Purpose |
+| Required setting | Value |
 |---|---|
-| `image` | Locally built Docker image tag; must match the build command |
-| `models_root`, `model_subdir` | Parent model directory and model subdirectory |
-| `ple_artifact` | Converted PLE directory containing `CURRENT` |
-| `ple_identity` | JSON file generated by enrollment |
-| `cufile_config` | cuFile configuration, default `config/cufile.json` |
-| `gpu_ids` | Two distinct GPU indices or full UUIDs, in rank order; the first GPU reads PLE |
-| `mode` | `tep2` by default; `tp2` is also available |
-| `draft_int8` | Enables full-vocabulary INT8 draft scoring with BF16 reranking |
-| `port` | Default 18420, localhost only |
-| `container_memory_gib` | Host RAM limit, default 21 GiB; not a VRAM limit |
-| `container_memory_and_swap_gib` | RAM plus swap limit, default 26 GiB |
-| `min_host_available_gib` | Stops the managed service below this available-host-memory threshold; default 2 GiB |
-| `core_offset_guard` | Optional read-only GPU core-offset check; disabled by default, never changes hardware |
-| `validation_dir` | Optional historical draft-validation samples; disabled by default |
+| `image` | Image tag matching the build command |
+| `models_root` / `model_subdir` | Parent model directory / model directory name |
+| `ple_artifact` | Converted directory from step 3, containing `CURRENT` |
+| `ple_identity` | `config/local-ple-identity.json` generated in step 3 |
+| `gpu_ids` | Two distinct GPU indices or full UUIDs; the first GPU reads PLE |
 
-Defaults enable TEP2, MTP6, and INT8 draft scoring with BF16 reranking. Keep the original BF16 draft weights; fallback settings are described below.
+Defaults enable TEP2, MTP6 and full-vocabulary INT8 draft scoring with BF16 reranking; retain the full BF16 draft weights. Host RAM is capped at 21 GiB, RAM plus swap at 26 GiB, and the service stops below 2 GiB available host RAM. Optional settings are listed below.
+
+<details>
+<summary>Optional configuration</summary>
+
+| Setting | Default and purpose |
+|---|---|
+| `cufile_config` | `config/cufile.json`; cuFile direct-read configuration |
+| `mode` | `tep2`; use `tp2` to disable expert parallelism |
+| `draft_int8` | `true`; `false` restores BF16 full-vocabulary draft scoring and retains MTP6 |
+| `port` | `18420`; localhost only |
+| `container_memory_gib` | `21`; host RAM limit, not VRAM |
+| `container_memory_and_swap_gib` | `26`; combined RAM and swap limit |
+| `min_host_available_gib` | `2`; stop the managed service below this available host RAM threshold |
+| `core_offset_guard` | `null`; optional read-only GPU core-offset check, e.g. `{"gpu_uuid":"full UUID","expected":0}` |
+| `validation_dir` | `null`; optional historical draft-validation samples |
+
+</details>
 
 ## 5. Start and connect
 
@@ -190,7 +191,7 @@ Then use the same localhost base URL on the client machine. For clients running 
 python3 scripts/serve.py stop --name "<container-name>"
 ```
 
-The stop command operates only on containers labeled as belonging to this project. To change settings or fall back, stop the old service, edit the configuration, and start again; a new container name is generated by default. `draft_int8=false` restores the original BF16 full-vocabulary draft scoring while retaining MTP6 and other optimizations. `mode=tp2` disables expert parallelism. The tools do not modify drivers, clocks, fans, or power limits.
+The stop command operates only on containers labeled as belonging to this project. To change settings or fall back, stop the old service, edit the configuration, and start again; a new container name is generated by default. `draft_int8=false` restores the original BF16 full-vocabulary draft scoring while retaining MTP6 and other optimizations. `mode=tp2` disables expert parallelism.
 
 | Symptom | Check |
 |---|---|

@@ -36,37 +36,9 @@
 
 ## 快速开始
 
-首次使用按以下顺序准备，详细命令见 [从零部署](docs/从零部署.md)。仓库不包含模型权重或预构建运行镜像。
+按 [部署指南](docs/从零部署.md) 完成三个步骤：准备主机 → 下载并转换模型数据 → 构建并启动服务。模型部署命令和配置集中在该页；仓库不包含模型权重或预构建镜像。
 
-| 步骤 | 完成条件 | 文档 |
-|---|---|---|
-| 1. 准备主机 | 驱动和 GDS 工具可用；双卡 P2P、SSD strict 直读数据校验通过 | [硬件与拓扑](docs/REFERENCE_HARDWARE.md) · [P2P / BAR1](docs/CMP_P2P.md) · [GDS](docs/GDS_NVME_P2PDMA_REPRODUCTION.md) |
-| 2. 准备模型 | 下载固定检查点，检查完整性，转换并登记 PLE 数据 | [模型与数据准备](docs/从零部署.md#1-下载源码与模型) |
-| 3. 构建并启动 | 填写路径与 GPU 顺序，构建镜像，启动并等待就绪 | [配置与启动](docs/从零部署.md) |
-
-GDS 文档提供配置与验证步骤；需要 CMP 驱动适配时，可使用单独整理的 [BAR1/P2P 参考补丁与构建指南](drivers/cmp-bar1/README.md)，先运行 [只读环境检查](drivers/cmp-bar1/README.md#1-先检查选择是否需要适配)。已有可用 P2P/GDS 的主机无需复制相同驱动设置。参考机器没有使用 PCIe switch 连接 SSD 与显卡，当前由一张卡直读，再广播给另一张卡。
-
-完成主机和数据准备后，在仓库根目录执行：
-
-```bash
-docker build -t qwen-flash-sm80:0.1.4 .
-# 仅首次创建配置；已有 config/local.json 时直接编辑它。
-cp -n config/example.json config/local.json
-```
-
-编辑 `config/local.json`，填写模型、PLE 数据和身份校验文件路径，以及两张 GPU 的标识；`gpu_ids` 第一项是读盘卡。然后启动：
-
-```bash
-python3 scripts/serve.py start --config config/local.json --dry-run
-python3 scripts/serve.py start --config config/local.json
-```
-
-`--dry-run` 只预览命令并读取 GPU 标识，不验证数据内容或直通能力。启动命令返回不代表模型已就绪；首次启动还需加载、编译和预热。使用启动器输出的容器名查看 `docker logs -f "<容器名>"`，并等待以下检查返回 HTTP 200：
-
-```bash
-curl --fail http://127.0.0.1:18420/health
-curl --fail http://127.0.0.1:18420/v1/models
-```
+CMP 驱动优先使用已包含 BAR1/P2P 补丁的原始社区项目 **bayley/cmpunlocker**，无需额外叠加本仓库补丁。已有 P2P/GDS 可用的主机可直接进入模型准备。
 
 ## API 接入
 
@@ -78,12 +50,6 @@ curl --fail http://127.0.0.1:18420/v1/models
 | API Key | 留空；客户端强制要求时可填占位值 |
 
 按客户端要求填写 Base URL 或完整地址，二者不要混用。默认仅允许本机访问：手机或另一台电脑上的 `127.0.0.1` 指向它自己。远程接入、请求示例及常见故障见 [部署指南](docs/从零部署.md)。
-
-停止服务时使用启动器输出的容器名：
-
-```bash
-python3 scripts/serve.py stop --name "<容器名>"
-```
 
 ## 已集成优化
 
@@ -114,4 +80,4 @@ python3 scripts/serve.py stop --name "<容器名>"
 
 ## 致谢与许可
 
-感谢 vLLM、Qwen 模型实现、原 Qwen3.8-Flash-DGX 社区项目，以及 NVIDIA GDS、Marlin、Triton、TileLang 等项目。仓库保留引用源码的既有声明，推理项目代码采用 Apache-2.0；可选 [CMP 驱动目录](drivers/cmp-bar1/NOTICE.md) 单独保留 GPL v2 与 NVIDIA 声明；模型、CUDA/cuFile、容器与第三方依赖按各自许可证使用。详见[来源与许可](docs/来源与许可.md)。
+感谢 vLLM、Qwen 模型实现、原 Qwen3.8-Flash-DGX 社区项目，以及 NVIDIA GDS、cmpunlocker 社区、Marlin、Triton、TileLang 等项目。仓库保留引用源码的既有声明，推理项目代码采用 Apache-2.0；模型、CUDA/cuFile、容器与第三方依赖按各自许可证使用。详见[来源与许可](docs/来源与许可.md)。

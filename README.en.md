@@ -34,41 +34,13 @@ Task prompt: **“写个网站网页”** (“Build a web page”), preceded by 
 
 *Prefill is a client-side approximation: input tokens divided by time to first nonempty output, including input processing and first-output generation. Decode is output tokens divided by the interval from the first to the last nonempty streamed output. It includes reasoning and answer text; empty events and the final completion notification do not extend this interval.
 
-Actual input lengths were 8,193 / 16,385 / 32,769 / 65,537 / 131,073 tokens, including the chat template. Sampling used service defaults: temperature 1.0, top-p 0.95, top-k 20, min-p 0, presence penalty 1.5; no fixed seed. Each request used a unique cache salt. [Machine-readable results](docs/context-benchmark-20260908.json) · [Full prompt construction and timing details (Chinese)](docs/性能记录.md).
+[Full prompt construction, sampling and timing details (Chinese)](docs/性能记录.md).
 
 ## Quick start
 
-Follow these stages in order. Full commands are in the [deployment guide](docs/DEPLOYMENT.en.md). This repository does not include model weights or a prebuilt runtime image.
+Follow the [deployment guide](docs/DEPLOYMENT.en.md): prepare the host → download and convert model data → build and start the service. Model deployment commands and settings are collected on that page. Model weights and prebuilt images are not included.
 
-| Stage | Required outcome | Guide |
-|---|---|---|
-| 1. Prepare the host | Driver and GDS tools available; GPU P2P and strict SSD reads pass data validation | [Hardware](docs/REFERENCE_HARDWARE.en.md) · [P2P / BAR1](docs/CMP_P2P.en.md) · [GDS](docs/GDS_NVME_P2PDMA_REPRODUCTION.en.md) |
-| 2. Prepare the model | Download and check the pinned checkpoint, then convert and enroll PLE data | [Model and data preparation](docs/DEPLOYMENT.en.md#1-download-source-and-model) |
-| 3. Build and start | Set paths and GPU order, build the image, then start and wait for readiness | [Configuration and startup](docs/DEPLOYMENT.en.md) |
-
-The GDS guide provides configuration and validation steps. CMP adaptation is available separately through the [BAR1/P2P reference patches and build guide](drivers/cmp-bar1/README.en.md); start with the [read-only host inventory](drivers/cmp-bar1/README.en.md#1-inspect-the-host-first). A host with working P2P/GDS does not need identical driver settings. The reference SSD and GPUs are not behind a PCIe switch; one GPU reads the data and broadcasts it to the other.
-
-Once the host and data are prepared, run from the repository root:
-
-```bash
-docker build -t qwen-flash-sm80:0.1.4 .
-# Create only on first setup; edit config/local.json directly if it already exists.
-cp -n config/example.json config/local.json
-```
-
-Edit `config/local.json` with model, PLE, and data-identity paths and both GPU identifiers. The first `gpu_ids` entry is the reading GPU. Then start:
-
-```bash
-python3 scripts/serve.py start --config config/local.json --dry-run
-python3 scripts/serve.py start --config config/local.json
-```
-
-The dry run previews the command and reads GPU identifiers; it does not validate data contents or direct-I/O capabilities. Startup submission is not readiness: initial loading also includes compilation and warmup. Follow `docker logs -f "<container-name>"` using the name printed by the launcher, then wait for HTTP 200 from both checks:
-
-```bash
-curl --fail http://127.0.0.1:18420/health
-curl --fail http://127.0.0.1:18420/v1/models
-```
+For CMP drivers, use the original community **bayley/cmpunlocker** project, which includes the BAR1/P2P patches. No additional patch bundle from this repository is needed. Hosts with working P2P/GDS can proceed directly to model preparation.
 
 ## API connection
 
@@ -80,12 +52,6 @@ curl --fail http://127.0.0.1:18420/v1/models
 | API key | Leave empty; use a placeholder if the client requires one |
 
 Use the base URL or full endpoint as required by the client. The default service is accessible only from the host: `127.0.0.1` on a phone or another computer points to that device itself. See the [deployment guide](docs/DEPLOYMENT.en.md) for remote access, request examples, and troubleshooting.
-
-Stop the service using the container name printed by the launcher:
-
-```bash
-python3 scripts/serve.py stop --name "<container-name>"
-```
 
 ## Integrated optimizations
 
@@ -116,4 +82,4 @@ Results come from different stages and conditions and **must not be added or mul
 
 ## Acknowledgments and license
 
-Thanks to vLLM, Qwen, the original Qwen3.8-Flash-DGX community project, NVIDIA GDS, Marlin, Triton, TileLang, and their contributors. Existing source notices are preserved. Inference project code is licensed under Apache-2.0; the optional [CMP driver directory](drivers/cmp-bar1/NOTICE.md) retains separate GPL v2 and NVIDIA notices; model weights, CUDA/cuFile, containers, and third-party dependencies retain their respective licenses. See [LICENSE](LICENSE) and [source provenance and licensing details (Chinese)](docs/来源与许可.md).
+Thanks to vLLM, Qwen, the original Qwen3.8-Flash-DGX community project, NVIDIA GDS, the cmpunlocker community, Marlin, Triton, TileLang, and their contributors. Existing source notices are preserved. Inference project code is licensed under Apache-2.0; model weights, CUDA/cuFile, containers, and third-party dependencies retain their respective licenses. See [LICENSE](LICENSE) and [source provenance and licensing details (Chinese)](docs/来源与许可.md).

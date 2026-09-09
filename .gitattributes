@@ -1,5 +1,2 @@
 * text=auto eol=lf
 *.cubin binary
-# Preserve unified-diff context lines and verbatim third-party license text.
-drivers/cmp-bar1/patches/*.patch -whitespace
-drivers/cmp-bar1/NVIDIA-COPYING -whitespace
