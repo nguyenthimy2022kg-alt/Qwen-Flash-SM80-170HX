@@ -36,6 +36,10 @@ Task prompt: **“写个网站网页”** (“Build a web page”), preceded by 
 
 [Full prompt construction, sampling and timing details (Chinese)](docs/性能记录.md).
 
+**Using the sequential-number output test used by some users, throughput can reach approximately 260 tok/s.**
+
+![Sequential-number output test: client reports 259 tokens/s and 240 ms time to first token](docs/images/sequential-numbers-259-tok-s.png)
+
 ## Quick start
 
 Follow the [deployment guide](docs/DEPLOYMENT.en.md): prepare the host → download and convert model data → build and start the service. Model deployment commands and settings are collected on that page. Model weights and prebuilt images are not included.
