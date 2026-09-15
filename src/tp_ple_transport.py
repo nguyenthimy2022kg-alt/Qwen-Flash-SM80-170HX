@@ -16,6 +16,8 @@ class TpPleTransport:
  def __init__(self,layer,device,max_tokens,owner=None,input_sources=None):
   self.layer=layer;self.device=torch.device(device);self.max_tokens=max_tokens;self.owner=owner
   group=get_tp_group();self.rank=group.rank_in_group
+  self.cpu_group=group.cpu_group
+  self.serialize_large_inputs=os.getenv("Q38_PLE_SERIALIZE_LARGE_INPUTS")=="1"
   assert group.world_size==2 and (owner is not None)==(self.rank==0)
   self.closed=False;self.close_count=0;self.active=False;self.dummy=False;self.tokens=0;self.sequence=0
   self.embedding_dim=layer.embedding_dim
@@ -42,7 +44,29 @@ class TpPleTransport:
   assert 0<num_tokens<=self.max_tokens
   if dummy_run:return self.signal_dummy_outputs(num_tokens)
   self.active=True;self.dummy=False;self.tokens=num_tokens;self.sequence+=1
-  if self.owner:self.owner.prepare_forward(num_reqs,num_tokens,False)
+  # This deployment captures up to 112 tokens. Larger batches use dynamic
+  # model calls and may allocate/load kernels while a peer NCCL kernel waits.
+  serial=self.serialize_large_inputs and num_tokens>112
+  if serial:
+   torch.cuda.current_stream(self.device).synchronize()
+  failure=None
+  try:
+   if self.owner:
+    self.owner.prepare_forward(num_reqs,num_tokens,False)
+    if serial:self.owner.wait_for_output_ready()
+  except Exception as exc:
+   if not serial:raise
+   failure=f"{type(exc).__name__}: {exc}"
+  if serial:
+   # CPU rendezvous, not a GPU barrier: rank 1 must not launch a spinning
+   # receiver while rank 0 is still in CUDA/cuFile producer operations.
+   status=(self.sequence,num_reqs,num_tokens,failure)
+   statuses=[None,None]
+   dist.all_gather_object(statuses,status,group=self.cpu_group)
+   if any(item[3] is not None for item in statuses):
+    raise RuntimeError(f"PLE readiness failed: {statuses}")
+   if statuses[0][:3]!=statuses[1][:3]:
+    raise RuntimeError(f"PLE large-input identity mismatch: {statuses}")
   with torch.cuda.stream(self.stream):
    if self.owner:
     # Bind this transfer to the current input generation. This event is recorded
@@ -56,6 +80,13 @@ class TpPleTransport:
    self.comm.broadcast(self.output[:num_tokens].view(torch.uint8).reshape(-1),src=0,stream=self.stream)
    if not self.owner:_stream_write_value32(self.stream,self.sem.flag_tensor,1)
    self.done.record(self.stream)
+  if serial:
+   self.stream.synchronize()
+   # Both ranks finish PLE communication before either begins dynamic model
+   # calls (and potentially another communicator's launches).
+   statuses=[None,None]
+   dist.all_gather_object(statuses,self.sequence,group=self.cpu_group)
+   if statuses[0]!=statuses[1]:raise RuntimeError("PLE completed generation mismatch")
   if self.verify_remaining:
    # Initial warmup-only cross-rank checks, excluded from formal timings.
    self.stream.synchronize()

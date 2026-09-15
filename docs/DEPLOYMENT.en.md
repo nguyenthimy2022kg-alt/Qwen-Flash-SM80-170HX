@@ -95,7 +95,7 @@ Conversion streams the table into its GDS layout without requiring the whole 51.
 ## 4. Build and configure
 
 ```bash
-docker build -t qwen-flash-sm80:0.1.4 .
+docker build -t qwen-flash-sm80:0.1.7 .
 ```
 
 Build the image locally; no prebuilt project image is published. Run the following configuration initialization only for a first deployment. If `config/local.json` already exists, skip this block and edit its local paths and image tag directly.
@@ -208,3 +208,29 @@ The stop command operates only on containers labeled as belonging to this projec
 The configured maximum context is 262,144 tokens with up to eight request slots; those are configuration limits, not validated full-length/concurrency claims. The published context benchmark covers one request at a time, from 8K to 128K input. It is not a full output-quality or generated-website functionality evaluation. A fresh whole-model deployment on a second machine has not yet been recorded.
 
 [Performance overview](../README.en.md) · [Detailed release validation (Chinese)](发布检查.md) · [Source provenance and licensing (Chinese)](来源与许可.md)
+
+## Upgrading an existing deployment
+
+v0.1.7 includes the multi-turn PLE handoff fix. Existing model files, converted PLE data, and identity files can be reused. From the repository root:
+
+```bash
+git pull --ff-only
+docker build -t qwen-flash-sm80:0.1.7 .
+python3 - <<'PYCONFIG'
+import json
+from pathlib import Path
+p = Path("config/local.json")
+c = json.loads(p.read_text())
+c["image"] = "qwen-flash-sm80:0.1.7"
+p.write_text(json.dumps(c, ensure_ascii=False, indent=2) + "\n")
+PYCONFIG
+```
+
+Stop the previous model container before starting another instance. Replace `<old-container-name>` with its actual name:
+
+```bash
+python3 scripts/serve.py stop --name "<old-container-name>"
+python3 scripts/serve.py start --config config/local.json
+```
+
+The API and model name stay unchanged. Large non-dummy batches (more than 112 tokens in this configuration) finish PLE reads and cross-GPU transfer before model execution; small decode batches retain overlap. Prefill latency may increase. Normal service/error logs and the memory guard remain enabled; no background stack-capture monitor is installed.

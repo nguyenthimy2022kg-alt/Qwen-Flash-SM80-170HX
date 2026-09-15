@@ -1222,6 +1222,32 @@ class InputDrivenGdsPleConnector:
         self._wait_metadata_enqueued(sequence)
         use_stream.wait_event(self._d2h_done_event)
 
+    def wait_for_output_ready(self, timeout: float = 60.0) -> None:
+        """Host wait for this generation, after the producer's GPU completion.
+
+        Used only by the serialized large-input TP path. A submitted read or a
+        queued flag write is insufficient: completed follows reader stream sync.
+        """
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            sequence = self._active_sequence
+            if sequence is None:
+                raise TicketError("no active PLE generation to wait for")
+            while True:
+                if self._error is not None:
+                    raise TicketError("PLE producer failed while waiting for readiness") from self._error
+                if self._closed or self._active_sequence != sequence:
+                    raise TicketError("PLE generation changed while waiting for readiness")
+                record = self._records.get(sequence)
+                if record is None:
+                    raise TicketError("PLE readiness record disappeared")
+                if record.get("completed"):
+                    return
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TicketError(f"PLE generation {sequence} completion timed out")
+                self._condition.wait(remaining)
+
     def _wait_metadata_enqueued(self, sequence: int) -> None:
         started = time.perf_counter()
         deadline = started + self._metadata_handoff_timeout
@@ -1603,6 +1629,7 @@ class InputDrivenGdsPleConnector:
                         if isinstance(reader_stats, Mapping):
                             self._ipc_reader_stats = dict(reader_stats)
                         self._stats["completed"] += 1
+                        self._condition.notify_all()
                         self._finalize_record_locked(request_id)
                         return
                 elif kind == "error":

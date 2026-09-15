@@ -2,12 +2,11 @@
 
 The binary cache returns the original native load_binary ABI tuple. Handles stay
 owned for process lifetime. No kernel is executed by this loader. Unknown later
-kernels keep the native loader, with start/end records for bounded diagnosis.
+kernels keep the native loader without per-load diagnostic records.
 """
 import functools
 import hashlib
 import json
-import time
 from pathlib import Path
 
 _initialized=False
@@ -37,10 +36,7 @@ def initialize(device, rank=None):
         digest=hashlib.sha256(binary).hexdigest()
         key=(name,digest,shared,ordinal)
         if key in _handles:return _handles[key]
-        path=Path(f'/evidence/triton-load-rank{rank}.jsonl')
-        def record(stage):
-            with path.open('a') as f:f.write(json.dumps(dict(stage=stage,name=name,sha256=digest,device=ordinal,time=time.time()))+'\n')
-        record('start');result=original(name,binary,shared,ordinal);record('end')
+        result=original(name,binary,shared,ordinal)
         assert len(result)==5
         _handles[key]=result
         return result

@@ -30,5 +30,6 @@
   "VLLM_WORKER_MULTIPROC_METHOD": "spawn",
   "VLLM_PLE_MTP_MOE_BACKEND": "triton",
   "CUFILE_LOGFILE_PATH": "/evidence/cufile.log",
-  "CUFILE_ENV_PATH_JSON": "/config/cufile.json"
+  "CUFILE_ENV_PATH_JSON": "/config/cufile.json",
+  "Q38_PLE_SERIALIZE_LARGE_INPUTS": "1"
 }

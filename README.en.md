@@ -12,6 +12,9 @@ Validated hardware: **two CMP 170HX GPUs (SM80, approximately 63.39 GiB availabl
 
 [Deployment guide](docs/DEPLOYMENT.en.md) · [Hardware and connectivity](docs/REFERENCE_HARDWARE.en.md) · [API connection](#api-connection) · [Integrated optimizations](#integrated-optimizations)
 
+**v0.1.7 multi-turn stability update:** expands QSA kernel preloading, adds ordered PLE handoff for large input batches, and removes extra diagnostic logging. Rebuild the image when upgrading; see [upgrade steps](docs/DEPLOYMENT.en.md#upgrading-an-existing-deployment). Performance figures below are from earlier versions; this update has not been re-benchmarked.
+
+
 ## Project highlights
 
 - **Direct SSD-to-GPU PLE reads:** GDS/cuFile reads the required lookup rows without staging the data payload in CPU memory, overlapping reads with model computation. Upstream already supports PLE offload to host RAM; this project adds an SSD-to-GPU path to the pinned upstream version.
@@ -79,7 +82,7 @@ Results come from different stages and conditions and **must not be added or mul
 
 - `src/`: runtime source overlay for the pinned upstream version, including GDS, HC, TileLang, and draft INT8.
 - `csrc/`: C++ source for the GDS reader extensions, compiled during the image build.
-- `src/preload/`: approximately 17 MB of preloaded Triton kernels and SHA256 manifests for this fixed SM80 environment; no model weights.
+- `src/preload/`: approximately 18 MB of preloaded Triton kernels and SHA256 manifests for this fixed SM80 environment; no model weights.
 - `patches/`: upstream source hashes and provenance information to prevent overwriting incompatible versions.
 - `config/`, `scripts/`: configuration examples, service control, data preparation, and build tools. CLI messages currently remain in Chinese.
 - `docs/`: performance, deployment, and validation records. English deployment, CMP P2P, and NVMe GDS guides are available; detailed historical records remain in Chinese.

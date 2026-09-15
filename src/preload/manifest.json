@@ -2260,5 +2260,107 @@
     "shared": 0,
     "file": "7263e8f5b928f5d528433d1ff1d53636c8fc67c398daafca59ec1417322abe3d.cubin",
     "sha256": "7263e8f5b928f5d528433d1ff1d53636c8fc67c398daafca59ec1417322abe3d"
+  },
+  {
+    "sha256": "4941266198f6ba7589a873c9b441f0749043ec1f7e776968b5eaba64165e063b",
+    "file": "4941266198f6ba7589a873c9b441f0749043ec1f7e776968b5eaba64165e063b.cubin",
+    "name": "_qsa_sparse_paged_gqa_splitk_kernel",
+    "shared": 25216
+  },
+  {
+    "sha256": "2ffe6fc18f44df2a1b22ebcfd763d701cb1ef1b3131d1743a6013da90e3ec728",
+    "file": "2ffe6fc18f44df2a1b22ebcfd763d701cb1ef1b3131d1743a6013da90e3ec728.cubin",
+    "name": "_qsa_sparse_paged_gqa_splitk_kernel",
+    "shared": 25216
+  },
+  {
+    "sha256": "7cd862f8086fa6f351a2602def49bb07db8eaff8668cbef55c7b6803072fe7c2",
+    "file": "7cd862f8086fa6f351a2602def49bb07db8eaff8668cbef55c7b6803072fe7c2.cubin",
+    "name": "_qsa_sparse_paged_gqa_splitk_kernel",
+    "shared": 75776
+  },
+  {
+    "sha256": "6e64abc63bda5a6ec411eb3443b25dc1104e438260c362378e3bcfaa92c3f99b",
+    "file": "6e64abc63bda5a6ec411eb3443b25dc1104e438260c362378e3bcfaa92c3f99b.cubin",
+    "name": "_qsa_sparse_paged_gqa_splitk_kernel",
+    "shared": 75776
+  },
+  {
+    "sha256": "e58304fe3f1451c5c9fd72519bea4b6e6a4e4d5fafd14a3f0d9ef7a59387d19e",
+    "file": "e58304fe3f1451c5c9fd72519bea4b6e6a4e4d5fafd14a3f0d9ef7a59387d19e.cubin",
+    "name": "_qsa_sparse_paged_gqa_splitk_kernel",
+    "shared": 75776
+  },
+  {
+    "sha256": "c2bc1c8dd90db2bc237fa90ef0baa2968d2ba2cdc25769f23da6cf18f9a81fae",
+    "file": "c2bc1c8dd90db2bc237fa90ef0baa2968d2ba2cdc25769f23da6cf18f9a81fae.cubin",
+    "name": "_qsa_pre_indexer_kernel",
+    "shared": 1024
+  },
+  {
+    "sha256": "eba9767028c8f73fe5c5a65ed4ff15979ceaf53776a78d407b1863c477bf9f28",
+    "file": "eba9767028c8f73fe5c5a65ed4ff15979ceaf53776a78d407b1863c477bf9f28.cubin",
+    "name": "_qsa_pre_indexer_kernel",
+    "shared": 1024
+  },
+  {
+    "sha256": "2ae0b15ab986e35a272bfc282b690ebe0c91349061b7b7c39e357e894f387e2c",
+    "file": "2ae0b15ab986e35a272bfc282b690ebe0c91349061b7b7c39e357e894f387e2c.cubin",
+    "name": "_qsa_pre_indexer_kernel",
+    "shared": 1024
+  },
+  {
+    "sha256": "a5a5457ea2671dfd5593f9afb101ec5db243708cab6535d5601927efa3e4f104",
+    "file": "a5a5457ea2671dfd5593f9afb101ec5db243708cab6535d5601927efa3e4f104.cubin",
+    "name": "_qsa_merge_splitk_kernel",
+    "shared": 0
+  },
+  {
+    "sha256": "c4522c8997d5c617e16cafcc9a6ba41a3d24652cffc07775119e7b93f8411e4f",
+    "file": "c4522c8997d5c617e16cafcc9a6ba41a3d24652cffc07775119e7b93f8411e4f.cubin",
+    "name": "_qsa_merge_splitk_kernel",
+    "shared": 0
+  },
+  {
+    "sha256": "a99e03ed0f409897e88d2f676b6d7fdefe63590a859bcfd3040b911b9233e938",
+    "file": "a99e03ed0f409897e88d2f676b6d7fdefe63590a859bcfd3040b911b9233e938.cubin",
+    "name": "_qsa_merge_splitk_kernel",
+    "shared": 0
+  },
+  {
+    "sha256": "d0cf34c566788315525eac40ed5aa4641687dba17de7ecea5de2a0c8fb0f53ca",
+    "file": "d0cf34c566788315525eac40ed5aa4641687dba17de7ecea5de2a0c8fb0f53ca.cubin",
+    "name": "_qsa_merge_splitk_kernel",
+    "shared": 0
+  },
+  {
+    "sha256": "e79ba5d7e34da5e66800145074e5292d38bee8a26d84bce9a1e2b62f72034724",
+    "file": "e79ba5d7e34da5e66800145074e5292d38bee8a26d84bce9a1e2b62f72034724.cubin",
+    "name": "_qsa_mqa_paged_kernel",
+    "shared": 20992
+  },
+  {
+    "sha256": "6c0b31d412d4b286f7c62fdc1c36eee812c78a34e88f567450549c11ce474422",
+    "file": "6c0b31d412d4b286f7c62fdc1c36eee812c78a34e88f567450549c11ce474422.cubin",
+    "name": "_qsa_mqa_paged_kernel",
+    "shared": 20992
+  },
+  {
+    "sha256": "fe721635dc6d21745eb8638ddfa2088585e2337d52e0776aea103643e6de2de5",
+    "file": "fe721635dc6d21745eb8638ddfa2088585e2337d52e0776aea103643e6de2de5.cubin",
+    "name": "_qsa_mqa_paged_kernel",
+    "shared": 20992
+  },
+  {
+    "sha256": "b874895c47629e5b20148678438cb090c112e25a87a94b6b3e0dfaf9faeba5d6",
+    "file": "b874895c47629e5b20148678438cb090c112e25a87a94b6b3e0dfaf9faeba5d6.cubin",
+    "name": "_expand_qsa_indices_kernel",
+    "shared": 0
+  },
+  {
+    "sha256": "999fdddccdd18bd9d563f23d1cba68ef74103a0fb9422ce372af50ef34bfa76c",
+    "file": "999fdddccdd18bd9d563f23d1cba68ef74103a0fb9422ce372af50ef34bfa76c.cubin",
+    "name": "_qsa_pre_indexer_kernel",
+    "shared": 1024
   }
 ]
