@@ -20,6 +20,8 @@ RUN CUDA_ROOT=/usr/local/cuda-13.0 \
     && python3 scripts/apply-overlay.py --target /usr/local/lib/python3.12/dist-packages \
     && python3 -m compileall -q src \
     && ldconfig
+ENV FLASHINFER_CUDA_ARCH_LIST=8.0 MAX_JOBS=1
+RUN LIBRARY_PATH=/usr/local/cuda-13.0/targets/x86_64-linux/lib/stubs python3 src/q38_pcie_kernel/module.py
 ENV Q38_PLE_SERIALIZE_LARGE_INPUTS=1
 ENV PYTHONPATH=/usr/local/lib/python3.12/dist-packages
 ENTRYPOINT []

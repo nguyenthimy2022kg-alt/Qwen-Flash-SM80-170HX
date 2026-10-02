@@ -17,13 +17,16 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('Q38_PLE_SERIALIZE_LARGE_INPUTS=1',cmd)
         self.assertEqual(cmd[cmd.index('--tensor-parallel-size')+1],'2')
         self.assertEqual(cmd[cmd.index('--pipeline-parallel-size')+1],'1')
-        self.assertEqual(json.loads(cmd[cmd.index('--speculative-config')+1])['num_speculative_tokens'],6)
+        self.assertEqual(json.loads(cmd[cmd.index('--speculative-config')+1])['num_speculative_tokens'],32)
+        self.assertEqual(cmd[cmd.index('--prefix-match-unit')+1],'36')
+        self.assertEqual(cmd[cmd.index('--max-num-seqs')+1],'1')
+        self.assertIn('--no-async-scheduling',cmd)
+        self.assertFalse(any('/hybrid' in x or '/bench' in x for x in cmd))
         self.assertNotIn('Q38_DRAFT_VALIDATION_DIR=/validation',cmd)
-    def test_fallback_disables_both_draft_overrides(self):
-        c=self.config();c.update(draft_int8=False,mode='tp2')
-        cmd=serve.build_command(c,'test',Path('/tmp/run'),self.devices())
-        self.assertIn('Q38_DRAFT_INT8=0',cmd);self.assertNotIn('--enable-expert-parallel',cmd)
-        self.assertFalse(json.loads(cmd[cmd.index('--speculative-config')+1])['use_local_argmax_reduction'])
+    def test_unsupported_draft_configuration_rejected_before_launch(self):
+        c=self.config();c.update(draft_int8=False)
+        with self.assertRaisesRegex(ValueError,'draft_int8'):
+            serve.build_command(c,'test',Path('/tmp/run'),self.devices())
     def test_alias_cannot_select_same_gpu_twice(self):
         c=self.config();c['gpu_ids']=['0','GPU-test-a'];d=self.devices();d['GPU-test-a']=d['0']
         with self.assertRaises(ValueError):serve.build_command(c,'test',Path('/tmp/run'),d)
@@ -84,6 +87,9 @@ class ReleaseTests(unittest.TestCase):
     def test_preloaded_binaries_match_manifest(self):
         p=ROOT/'src/preload';rows=json.loads((p/'manifest.json').read_text())
         self.assertEqual(len(rows),394)
+        for row in rows:self.assertEqual(hashlib.sha256((p/row['file']).read_bytes()).hexdigest(),row['sha256'])
+        p=ROOT/'src/memory_extra_preload';rows=json.loads((p/'manifest.json').read_text())
+        self.assertGreater(len(rows),0)
         for row in rows:self.assertEqual(hashlib.sha256((p/row['file']).read_bytes()).hexdigest(),row['sha256'])
 
 if __name__=='__main__':unittest.main()

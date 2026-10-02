@@ -1,33 +1,25 @@
-# Deployment guide
+# Deployment
 
 [简体中文](从零部署.md) | **English** · [Home](../README.en.md)
 
-This guide covers model download, PLE conversion, image building, and service access on a prepared Linux host with two SM80 GPUs. Prepare the driver, Docker, GPU P2P, and GDS first. Except for cloning the repository and forwarding SSH, run commands from the repository root on the service host.
+v0.2.0 uses the pinned NVIDIA checkpoint. Run the commands on the Linux server, from the repository root after cloning. The repository contains no model weights or prebuilt image.
 
-[Requirements](#requirements) · [Download and check](#1-download-source-and-model) · [Convert PLE](#3-convert-and-enroll-ple-data) · [Build and configure](#4-build-and-configure) · [Start and connect](#5-start-and-connect) · [Troubleshoot](#stop-and-troubleshoot)
+## Environment and capacity
 
-## Requirements
+- Linux x86_64, Python 3.10+, Git, Docker, NVIDIA Container Toolkit and a CUDA 13-compatible driver.
+- Validated machine: two CMP 170HX SM80 GPUs, about 64 GiB per GPU; about 32 GiB host RAM and 8 GiB swap. Other GPUs have not completed full-model validation.
+- The original checkpoint occupies 132.68 GB. GDS conversion adds approximately 51.2 GB; the loading view adds 2.52 GB on the same filesystem using hard links. Keep the original files. Reserve at least 220 GB, plus Docker images and build/cache space; across filesystems the view copies the other weights too and needs about 80 GB more.
+- Container limits: 21 GiB RAM, 26 GiB RAM + swap. The launcher stops its service when host available RAM falls below 2 GiB.
 
-- Linux x86_64, Git, curl, Python 3.10 or newer with `venv` and pip, Docker, [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), and a CUDA 13-compatible driver. The repository's data-preparation scripts use only the Python standard library; the download tool is installed in its own virtual environment.
-- Validated hardware: two CMP 170HX GPUs, approximately 63.39 GiB VRAM each. Two 40 GB cards are not an equivalent configuration. Other GPUs have not undergone whole-model validation.
-- The reference host has approximately 32 GiB RAM and 8 GiB swap. Default container limits are 21 GiB RAM and 26 GiB RAM plus swap. Leave memory available for the host and other applications.
-- Model files total approximately 135.2 GB. Converted PLE data adds approximately 51.2 GB. Reserve at least 220 GB for data, plus separate space for Docker layers and compilation caches.
-- Working GPU P2P and strict GDS/cuFile reads on the target NVMe/filesystem/driver/topology. Direct-read data validation must pass; installing GDS alone does not establish that the path works. The supplied configuration disables host-staging fallback with `allow_compat_mode=false`.
+## Host prerequisites
 
-## Host acceptance criteria
+GPU P2P and GDS are separate checks. CMP users can follow [bayley/cmpunlocker](https://github.com/bayley/cmpunlocker/tree/5a7bb4b7e5056306fe49e8b824787659abb19914) for BAR1/P2P, then the [NVMe GDS guide](GDS_NVME_P2PDMA_REPRODUCTION.en.md) for actual SSD-to-GPU reads with CPU fallback disabled. No extra driver patch from this repository is needed. The container does not configure host drivers.
 
-Complete these two checks first. If both already work, proceed to step 1.
-
-| Requirement | Setup and pass condition |
-|---|---|
-| GPU P2P | For CMP GPUs, use the [complete bayley/cmpunlocker BAR1/P2P implementation](https://github.com/bayley/cmpunlocker/tree/5a7bb4b7e5056306fe49e8b824787659abb19914). Follow its P2P setup instructions and verify actual transfers in both directions. No additional patch bundle from this repository is needed. |
-| Direct SSD-to-GPU reads | Follow the [GDS setup steps](GDS_NVME_P2PDMA_REPRODUCTION.en.md): install the tools, configure NVMe P2PDMA, and verify data with CPU fallback disabled. cmpunlocker does not replace this step. |
-
-The reference host uses an H12D motherboard, one EPYC 7532, two CMP 170HX GPUs and a 990 PRO 4TB. The SSD and GPUs are **not behind a PCIe switch**. The SSD and reading GPU share a CPU PCIe root bus through separate root ports. The first GPU reads PLE data and broadcasts it to the second over P2P. See the [hardware diagram](REFERENCE_HARDWARE.en.md) when comparing slots.
+The [reference H12D machine](REFERENCE_HARDWARE.en.md) does not use a PCIe switch board. Choose the first GPU as the PLE reader according to the SSD/GPU topology. Existing working hosts can skip host reconfiguration.
 
 ## 1. Download source and model
 
-The examples place data under `$HOME/qwen-flash-data`. Its `ple-gds` directory must reside on an NVMe filesystem validated for GDS. If your home directory is on an unsuitable disk, choose a data location first and replace the paths below, including `root` in step 4's configuration script. If you already cloned the repository from the README, skip the first two commands.
+Use a data directory on the NVMe filesystem that passed GDS validation. Adjust all paths consistently if it is not your home filesystem.
 
 ```bash
 git clone https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX.git
@@ -35,139 +27,78 @@ cd Qwen-Flash-SM80-170HX
 python3 -m venv .venv-hf
 .venv-hf/bin/pip install 'huggingface_hub==1.29.0'
 mkdir -p "$HOME/qwen-flash-data/models"
-```
-
-Checkpoint: [RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qwen3.8-Flash-Next-NVFP4/tree/7b719225242aacd3dbd3f9407468c2ee9a9d2594), pinned revision `7b719225242aacd3dbd3f9407468c2ee9a9d2594`, also recorded in [`config/model-source.json`](../config/model-source.json). It includes NVFP4 main-model weights, 31 BF16 MTP tensors, 128 FP8 PLE shards, and a BF16 scale. No additional PLE quantization or separate MTP checkpoint is required. The checkpoint retains its source license.
-
-Review the download plan, then download:
-
-```bash
-.venv-hf/bin/hf download RadixArk/Qwen3.8-Flash-Next-NVFP4 \
-  --revision 7b719225242aacd3dbd3f9407468c2ee9a9d2594 \
-  --local-dir "$HOME/qwen-flash-data/models/Qwen3.8-Flash-Next-NVFP4" \
-  --dry-run
-
-.venv-hf/bin/hf download RadixArk/Qwen3.8-Flash-Next-NVFP4 \
-  --revision 7b719225242aacd3dbd3f9407468c2ee9a9d2594 \
-  --local-dir "$HOME/qwen-flash-data/models/Qwen3.8-Flash-Next-NVFP4" \
+.venv-hf/bin/hf download nvidia/Qwen3.8-Flash-Next-NVFP4 \
+  --revision fc694b54fb0174e0913e6adf86691ef85a4ead47 \
+  --local-dir "$HOME/qwen-flash-data/models/NVIDIA-Qwen3.8-Flash-Next-NVFP4" \
   --max-workers 2
 ```
 
-Rerun the download command after a network interruption. Keep the complete checkpoint, including its original FP8 PLE shards, for model-file checks and future conversion. This path does not require historical `.plefp8.bak` files or the legacy checkpoint-view script.
+The [pinned NVIDIA checkpoint](https://huggingface.co/nvidia/Qwen3.8-Flash-Next-NVFP4/tree/fc694b54fb0174e0913e6adf86691ef85a4ead47) has NVFP4 main weights, mixed FP8/BF16 MTP weights and FP8 PLE. Re-run the command to resume a download.
 
-## 2. Check model files
+## 2. Check files and prepare the loading view
 
 ```bash
 python3 scripts/check-model.py \
-  --model "$HOME/qwen-flash-data/models/Qwen3.8-Flash-Next-NVFP4"
+  --model "$HOME/qwen-flash-data/models/NVIDIA-Qwen3.8-Flash-Next-NVFP4"
+python3 scripts/prepare-nvidia-view.py \
+  --source "$HOME/qwen-flash-data/models/NVIDIA-Qwen3.8-Flash-Next-NVFP4" \
+  --target "$HOME/qwen-flash-data/models/NVIDIA-Qwen3.8-Flash-Next-GDS"
 ```
 
-This checks the pinned config/index hashes, 206 safetensors files, tensor headers and file sizes, PLE/MTP formats, and tokenizer file presence. It does not load the model or hash all weight payloads. `weight_payload_sha256_verified: false` explicitly reports that limitation.
+The first command checks pinned metadata hashes and all indexed tensor headers and lengths; it does not hash every weight payload. The second extracts the MTP weights and PLE scale from the combined shard, verifies copied payloads, and excludes PLE rows from the model loading index. This avoids scanning the entire PLE table during model loading. It preserves the original checkpoint and refuses an existing target directory.
 
-For full downloaded-file verification:
-
-```bash
-.venv-hf/bin/hf cache verify RadixArk/Qwen3.8-Flash-Next-NVFP4 \
-  --revision 7b719225242aacd3dbd3f9407468c2ee9a9d2594 \
-  --local-dir "$HOME/qwen-flash-data/models/Qwen3.8-Flash-Next-NVFP4" \
-  --fail-on-missing-files
-```
-
-## 3. Convert and enroll PLE data
+## 3. Convert and register GDS data
 
 ```bash
 python3 scripts/prepare-ple.py mapping \
-  --index "$HOME/qwen-flash-data/models/Qwen3.8-Flash-Next-NVFP4/model.safetensors.index.json" \
+  --index "$HOME/qwen-flash-data/models/NVIDIA-Qwen3.8-Flash-Next-NVFP4/model.safetensors.index.json" \
   --output "$HOME/qwen-flash-data/ple-mapping.json"
-
 python3 scripts/convert-ple-to-gds-layout.py \
-  --checkpoint-index "$HOME/qwen-flash-data/models/Qwen3.8-Flash-Next-NVFP4/model.safetensors.index.json" \
+  --checkpoint-index "$HOME/qwen-flash-data/models/NVIDIA-Qwen3.8-Flash-Next-NVFP4/model.safetensors.index.json" \
   --mapping "$HOME/qwen-flash-data/ple-mapping.json" \
   --output "$HOME/qwen-flash-data/ple-gds" --compact --block-rows 256
-
 python3 scripts/prepare-ple.py enroll \
   --artifact "$HOME/qwen-flash-data/ple-gds" \
   --output config/local-ple-identity.json
 ```
 
-Conversion streams the table into its GDS layout without requiring the whole 51.2 GB table in RAM. Enrollment verifies the full converted data by default and records its identity in `config/local-ple-identity.json`; retain that check for a new deployment. Mapping and enrollment refuse to overwrite existing output files. Once valid data is prepared, reuse it instead of reconverting on every startup.
+Use the **original checkpoint index**, not the loading view, for conversion. Conversion streams the table without loading all 51.2 GB into RAM; enrollment verifies the output. Existing verified NVIDIA artifacts can be reused. Do not reuse RadixArk PLE with NVIDIA weights.
 
 ## 4. Build and configure
 
 ```bash
-docker build -t qwen-flash-sm80:0.1.7 .
-```
-
-Build the image locally; no prebuilt project image is published. Run the following configuration initialization only for a first deployment. If `config/local.json` already exists, skip this block and edit its local paths and image tag directly.
-
-```bash
+docker build -t qwen-flash-sm80:0.2.0 .
 cp -n config/example.json config/local.json
-python3 - <<'PY'
+python3 - <<'PYCONFIG'
 import json
 from pathlib import Path
 p = Path('config/local.json')
 c = json.loads(p.read_text())
 root = Path.home() / 'qwen-flash-data'
-c['models_root'] = str(root / 'models')
-c['model_subdir'] = 'Qwen3.8-Flash-Next-NVFP4'
-c['ple_artifact'] = str(root / 'ple-gds')
-p.write_text(json.dumps(c, ensure_ascii=False, indent=2) + '\n')
-PY
+c.update(image='qwen-flash-sm80:0.2.0', models_root=str(root / 'models'),
+         model_subdir='NVIDIA-Qwen3.8-Flash-Next-GDS', ple_artifact=str(root / 'ple-gds'))
+p.write_text(json.dumps(c, indent=2) + '\n')
+PYCONFIG
 ```
 
-Review `gpu_ids` in `config/local.json`. GPU indices default to `0` and `1`; full UUIDs are also accepted. The first GPU owns PLE reads, so choose the order with SSD/GPU topology in mind. Model, PLE, and identity paths must refer to the files prepared above. Paths in the configuration resolve relative to the repository root. Model symlinks must remain accessible through the `/models` mount; mount their common parent directory when necessary.
-
-| Required setting | Value |
-|---|---|
-| `image` | Image tag matching the build command |
-| `models_root` / `model_subdir` | Parent model directory / model directory name |
-| `ple_artifact` | Converted directory from step 3, containing `CURRENT` |
-| `ple_identity` | `config/local-ple-identity.json` generated in step 3 |
-| `gpu_ids` | Two distinct GPU indices or full UUIDs; the first GPU reads PLE |
-
-Defaults enable TEP2, MTP6 and full-vocabulary INT8 draft scoring with BF16 reranking; retain the full BF16 draft weights. Host RAM is capped at 21 GiB, RAM plus swap at 26 GiB, and the service stops below 2 GiB available host RAM. Optional settings are listed below.
-
-<details>
-<summary>Optional configuration</summary>
-
-| Setting | Default and purpose |
-|---|---|
-| `cufile_config` | `config/cufile.json`; cuFile direct-read configuration |
-| `mode` | `tep2`; use `tp2` to disable expert parallelism |
-| `draft_int8` | `true`; `false` restores BF16 full-vocabulary draft scoring and retains MTP6 |
-| `port` | `18420`; localhost only |
-| `container_memory_gib` | `21`; host RAM limit, not VRAM |
-| `container_memory_and_swap_gib` | `26`; combined RAM and swap limit |
-| `min_host_available_gib` | `2`; stop the managed service below this available host RAM threshold |
-| `core_offset_guard` | `null`; optional read-only GPU core-offset check, e.g. `{"gpu_uuid":"full UUID","expected":0}` |
-| `validation_dir` | `null`; optional historical draft-validation samples |
-
-</details>
+Review `gpu_ids`, paths and `port` in `config/local.json` before starting. Relative paths resolve from the repository root. The default API/model name remains unchanged. The build compiles the PCIe communication module without requiring GPU access; running it still requires working P2P. If Docker lacks buildx, install it or use `DOCKER_BUILDKIT=0 docker build ...`.
 
 ## 5. Start and connect
 
 ```bash
 python3 scripts/serve.py start --config config/local.json --dry-run
 python3 scripts/serve.py start --config config/local.json
-```
-
-The dry run validates configuration and reads GPU identifiers before printing the launch command. It does not load the model or check that data files exist. A normal start also checks required paths, file/directory types, Docker access, the local image, and container-name conflicts before submitting startup. It does not replace step 2's model-file checks or establish that P2P/GDS works.
-
-The launcher prints a container name and log directory under `runs/`. The first load includes compilation and warmup. Follow progress with `docker logs -f "<container-name>"`. Submission does not mean the service is ready; wait for HTTP 200 from both endpoints before sending a request:
-
-```bash
 curl --fail http://127.0.0.1:18420/health
 curl --fail http://127.0.0.1:18420/v1/models
 ```
 
-| Client setting | Value |
+The launcher rejects another concurrently running service carrying this project’s label. Wait for loading and warmup to finish and `/health` to return HTTP 200. `--dry-run` prints the command without loading the model. Logs are in `runs/<container>/`; use `docker logs -f <container>` for startup progress.
+
+| Setting | Value |
 |---|---|
 | Base URL | `http://127.0.0.1:18420/v1` |
-| Full chat-completions URL | `http://127.0.0.1:18420/v1/chat/completions` |
 | Model | `qwen3.8-flash-next` |
-| API key | Authentication is not configured; use `local` if the client requires a value |
-
-Example streaming request:
+| API key | `local` (placeholder) |
 
 ```bash
 curl --no-buffer --fail-with-body http://127.0.0.1:18420/v1/chat/completions \
@@ -175,62 +106,35 @@ curl --no-buffer --fail-with-body http://127.0.0.1:18420/v1/chat/completions \
   -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"写个网站网页"}],"max_tokens":50000,"stream":true}'
 ```
 
-The example prompt means “Build a web page.” Thinking is enabled with the template default `xhigh`; the client must handle both reasoning and answer content. `max_tokens` limits their combined output and is a ceiling, not a required length. Verify that content streams and the request finishes successfully to complete the generation check. Benchmark sampling and timing details are in the [performance record (Chinese)](性能记录.md).
+Default: thinking enabled, `preserve_thinking=true`, `reasoning_effort=xhigh`; temperature 1, top-p 0.95, top-k 20. For timing tests send `"temperature":0` and `"chat_template_kwargs":{"enable_thinking":false}`. Tool calling uses `qwen3_coder`; send `tools` and `tool_choice` in requests. The client must return tool results and any reasoning history it needs preserved.
 
-These URLs use the default port 18420. If you change `port`, update client URLs and forwarding ports accordingly. The service binds to localhost. For access from another machine, run an SSH tunnel on the client machine:
+One request runs at a time. The combined context limit is 262,144 tokens; output is limited by both `max_tokens` and remaining context. Images: up to 128 configured, subject to actual context/VRAM; video is disabled. Prefix matching uses 36-token units while physical blocks remain 3,456 tokens. Do not enable async scheduling or increase active request slots with this release.
 
-```bash
-ssh -N -L 18420:127.0.0.1:18420 username@service-host
-```
+The service binds to localhost without authentication. For remote access, run SSH forwarding on the client machine: `ssh -N -L 18420:127.0.0.1:18420 user@server`.
 
-Then use the same localhost base URL on the client machine. For clients running inside a container, `127.0.0.1` refers to that container; configure a network path to the service host.
-
-## Stop and troubleshoot
+### Stop
 
 ```bash
-python3 scripts/serve.py stop --name "<container-name>"
+python3 scripts/serve.py stop --name "<container>"
 ```
 
-The stop command operates only on containers labeled as belonging to this project. To change settings or fall back, stop the old service, edit the configuration, and start again; a new container name is generated by default. `draft_int8=false` restores the original BF16 full-vocabulary draft scoring while retaining MTP6 and other optimizations. `mode=tp2` disables expert parallelism.
+## Troubleshooting
 
-| Symptom | Check |
-|---|---|
-| `POST /v1` returns 404 | The client may require the full `/v1/chat/completions` URL |
-| Missing model or PLE files | Paths, download completeness, conversion, and enrollment |
-| Mapping or identity output already exists | Reuse validated data; for a new generation, choose new output filenames and update the corresponding configuration paths |
-| Model revision mismatch | Use the pinned revision and unmodified config/index |
-| cuFile registration or read failure | Host driver, filesystem, topology, and strict GDS validation |
-| `memory-stop.txt` appears | Available host memory fell below the configured threshold |
-| Image not found | Build the image and check that its tag matches `config/local.json` |
-| Docker is inaccessible | Check that Docker is running and the current user has permission to access it |
-| Health check fails or no container appears | Inspect `runs/<container-name>/supervisor.log`, `error.txt`, and `docker logs` |
-
-The configured maximum context is 262,144 tokens with up to eight request slots; those are configuration limits, not validated full-length/concurrency claims. The published context benchmark covers one request at a time, from 8K to 128K input. It is not a full output-quality or generated-website functionality evaluation. A fresh whole-model deployment on a second machine has not yet been recorded.
-
-[Performance overview](../README.en.md) · [Detailed release validation (Chinese)](发布检查.md) · [Source provenance and licensing (Chinese)](来源与许可.md)
+- PLE/GDS errors: check the host direct-read validation, artifact identity and checkpoint pairing. CPU fallback is disabled.
+- No HTTP 200: inspect the startup log and `error.txt`; a submitted start is not a ready service.
+- `memory-stop.txt`: host available RAM reached the guard threshold; check other workloads before restarting.
+- Wrong model revision: use the pinned checkpoint and do not edit its original config/index.
+- Existing output: retain verified data, or choose new output paths and update the matching identity.
 
 ## Upgrading an existing deployment
 
-v0.1.7 includes the multi-turn PLE handoff fix. Existing model files, converted PLE data, and identity files can be reused. From the repository root:
+Stop the old model before loading another. v0.2.0 changes the supported checkpoint to NVIDIA: **a v0.1.7 RadixArk deployment must complete steps 1–3** and update the model/PLE/identity paths. Keep its old image and configuration for rollback. Already prepared, verified NVIDIA data can be reused.
 
 ```bash
 git pull --ff-only
-docker build -t qwen-flash-sm80:0.1.7 .
-python3 - <<'PYCONFIG'
-import json
-from pathlib import Path
-p = Path("config/local.json")
-c = json.loads(p.read_text())
-c["image"] = "qwen-flash-sm80:0.1.7"
-p.write_text(json.dumps(c, ensure_ascii=False, indent=2) + "\n")
-PYCONFIG
-```
-
-Stop the previous model container before starting another instance. Replace `<old-container-name>` with its actual name:
-
-```bash
-python3 scripts/serve.py stop --name "<old-container-name>"
+docker build -t qwen-flash-sm80:0.2.0 .
+# Update config/local.json paths and image before starting.
 python3 scripts/serve.py start --config config/local.json
 ```
 
-The API and model name stay unchanged. Large non-dummy batches (more than 112 tokens in this configuration) finish PLE reads and cross-GPU transfer before model execution; small decode batches retain overlap. Prefill latency may increase. Normal service/error logs and the memory guard remain enabled; no background stack-capture monitor is installed.
+Set `image` to `qwen-flash-sm80:0.2.0` and keep `draft_int8=true`. The old standalone `draft_int8=false` toggle does not apply to the new probability/history drafting path and is rejected early. Other startup parameters are stored in `config/vllm-args.json`; keep the documented single-request/synchronous constraints. [Validation scope](RELEASE_VALIDATION.en.md).

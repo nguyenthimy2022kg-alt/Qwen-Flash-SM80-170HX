@@ -3,6 +3,7 @@
 """Inference-only Qwen3-Next/Qwen3.5 model."""
 
 import os
+import gdn_wide_mtp
 from . import gdn_graph_runtime
 from typing import Literal
 
@@ -504,6 +505,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
                 self.gdn_decode_kernel = "triton"
         self.enable_fused_gdn_decode = self.gdn_decode_kernel == "cuda"
         logger.info_once("GDN decode kernel: %s", self.gdn_decode_kernel)
+        self._wide_mtp_state_indices = torch.empty((1, 8), dtype=torch.int32, device=current_platform.current_device())
+        self._wide_mtp_num_accepted = torch.empty((1,), dtype=torch.int32, device=current_platform.current_device())
 
         compilation_config = get_current_vllm_config().compilation_config
         if prefix in compilation_config.static_forward_context:
@@ -1753,6 +1756,10 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
         assert num_accepted_tokens is not None
 
         num_requests = attn_metadata.num_spec_decodes
+        if state_indices.size(1) > MAX_FUSED_GDN_MTP_TOKENS:
+            assert gdn_wide_mtp.eligible(attn_metadata, state_indices)
+            state_indices, num_accepted_tokens = gdn_wide_mtp.adapt(
+                self, state_indices, num_accepted_tokens)
         ops.fused_gdn_decode_post_conv_mtp(
             mixed_qkv=mixed_qkv,
             a=a,
@@ -1815,7 +1822,8 @@ class QwenGatedDeltaNetAttention(GatedDeltaNetAttention):
             and self.num_v_heads % self.num_k_heads == 0
             and self.num_v_heads // self.num_k_heads in (1, 2, 3, 4, 8)
             and state_indices is not None
-            and state_indices.size(1) <= MAX_FUSED_GDN_MTP_TOKENS
+            and (state_indices.size(1) <= MAX_FUSED_GDN_MTP_TOKENS
+                 or gdn_wide_mtp.eligible(attn_metadata, state_indices))
             and hasattr(torch.ops._C, "fused_gdn_decode_post_conv_mtp")
         )
 

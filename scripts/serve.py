@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """启动、停止社区运行包；仅操作带有本项目标签的容器。"""
 from pathlib import Path
-import argparse,ctypes,json,math,re,subprocess as sp,sys,time,datetime
+import argparse,ctypes,fcntl,json,math,re,subprocess as sp,sys,time,datetime
 ROOT=Path(__file__).resolve().parents[1]
 LABEL='qwen-flash-sm80.managed'
 
@@ -34,6 +34,7 @@ def read_config(path):
     if c['container_memory_gib']>c['container_memory_and_swap_gib']:
         raise ValueError('container_memory_and_swap_gib 不能小于 container_memory_gib')
     if not isinstance(c.get('draft_int8'),bool):raise ValueError('draft_int8 必须为布尔值')
+    if not c['draft_int8']:raise ValueError('v0.2.0 的混合草稿路径要求 draft_int8=true；旧配置请按升级说明迁移')
     guard=c.get('core_offset_guard')
     if guard is not None and (not isinstance(guard,dict) or
             not isinstance(guard.get('gpu_uuid'),str) or not guard['gpu_uuid'].strip() or
@@ -60,6 +61,11 @@ def check_docker(c,name):
         raise RuntimeError(f"无法读取本地镜像 {c['image']}；请先按部署指南构建镜像（启动器不会自动拉取）："+result.stderr.strip())
     result=sp.run(['docker','container','inspect','--',name],capture_output=True,text=True)
     if result.returncode==0:raise RuntimeError('同名容器已存在，请换名')
+    check_active_service()
+
+def check_active_service():
+    result=sp.run(['docker','ps','--filter','label='+LABEL+'=1','--format','{{.Names}}'],capture_output=True,text=True,check=True)
+    if result.stdout.strip():raise RuntimeError('已有本项目服务运行，请先停止，避免重复加载模型：'+result.stdout.strip())
 
 def check_paths(c):
     for field,path in [('models_root',Path(c['models_root'])),
@@ -85,6 +91,7 @@ def gpu_inventory():
     return result
 
 def build_command(c,name,run,devices):
+    if not c['draft_int8']:raise ValueError('混合草稿要求 draft_int8=true')
     for gpu in c['gpu_ids']:
         if str(gpu) not in devices:raise ValueError(f'未找到所选 GPU：{gpu}，请填写本机显卡编号或完整 UUID')
     selected=[devices[str(x)] for x in c['gpu_ids']]
@@ -131,7 +138,12 @@ def stop(name):
 
 def supervise(run):
     c=json.loads((run/'config.json').read_text());cmd=json.loads((run/'command.json').read_text());name=cmd[cmd.index('--name')+1];started=False
+    lock_dir=Path.home()/'.cache/qwen-flash-sm80';lock_dir.mkdir(parents=True,exist_ok=True)
+    lock=(lock_dir/'service.lock').open('a')
     try:
+        try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError as exc:raise RuntimeError('已有模型启动或运行中，请先停止该服务') from exc
+        check_active_service()
         check_offset(c.get('core_offset_guard'))
         if available_gib()<c['min_host_available_gib']:raise RuntimeError('主机可用内存低于保护阈值')
         sp.run(cmd,check=True);started=True
@@ -149,6 +161,7 @@ def supervise(run):
         if started:
             with (run/'server.log').open('wb') as f:sp.run(['docker','logs',name],stdout=f,stderr=sp.STDOUT)
             (run/'state.json').write_text(json.dumps(inspect(name)['State']))
+        lock.close()
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='action',required=True)

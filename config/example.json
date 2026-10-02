@@ -1,7 +1,7 @@
 {
-  "image": "qwen-flash-sm80:0.1.7",
+  "image": "qwen-flash-sm80:0.2.0",
   "models_root": "/data/models",
-  "model_subdir": "Qwen3.8-Flash-Next-NVFP4",
+  "model_subdir": "NVIDIA-Qwen3.8-Flash-Next-GDS",
   "ple_artifact": "/data/ple-gds",
   "cufile_config": "config/cufile.json",
   "gpu_ids": [

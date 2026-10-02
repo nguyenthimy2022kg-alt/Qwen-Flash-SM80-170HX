@@ -5,7 +5,7 @@ import hashlib
 import json
 import math
 import sys
-from collections import defaultdict
+from collections import defaultdict, Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +27,7 @@ def inspect_checkpoint(model, source):
         files[filename].append(key)
     total_bytes = 0
     mtp_count = 0
+    mtp_dtypes = Counter()
     ple_parts = {}
     scales = []
     for filename, names in files.items():
@@ -53,8 +54,9 @@ def inspect_checkpoint(model, source):
                 raise ValueError(f"{filename}: {name} 长度无效或文件未下载完整")
             if name.startswith("mtp."):
                 mtp_count += 1
-                if dtype != "BF16":
-                    raise ValueError(f"MTP 张量必须为 BF16：{name}")
+                mtp_dtypes[dtype] += 1
+                if dtype not in source.get("mtp_dtype_counts", {"BF16": source["mtp_tensors"]}):
+                    raise ValueError(f"MTP 张量必须为 BF16 或固定检查点声明的格式：{name}")
             if "ngram_embedding.shard_" in name and name.endswith(".weight"):
                 part = int(name.rsplit("shard_", 1)[1].split(".", 1)[0])
                 if part in ple_parts or dtype != source["ple_dtype"] or len(shape) != 2 or shape[1] != source["ple_columns"]:
@@ -68,6 +70,8 @@ def inspect_checkpoint(model, source):
         raise ValueError("PLE 必须为 128 分片，且总行数与固定版本一致")
     if scales != [("BF16", 2)] or mtp_count != source["mtp_tensors"]:
         raise ValueError("PLE scale 或 MTP 张量不符合固定版本")
+    if dict(mtp_dtypes) != source.get("mtp_dtype_counts", {"BF16": source["mtp_tensors"]}):
+        raise ValueError("MTP 张量格式数量与固定检查点不符")
     for filename in ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja"):
         if not (model / filename).is_file():
             raise FileNotFoundError(f"缺少推理所需文件：{filename}")

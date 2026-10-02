@@ -10,3 +10,7 @@ Copyright 2026 blazux.
 The original license notice is retained in licenses/qwen3.8-Flash-DGX-LICENSE.
 
 CUDA/cuFile, model weights and third-party packages are not relicensed by this project.
+
+PCIe IPC communication sources: FlashInfer, Apache-2.0.
+Pinned upstream commit: 6870e3fff46b1e768ad423ea48d286e6f3e250fe.
+See src/q38_pcie_kernel/upstream/LICENSE and preserved source headers.

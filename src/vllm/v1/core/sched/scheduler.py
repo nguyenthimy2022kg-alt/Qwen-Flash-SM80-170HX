@@ -555,6 +555,27 @@ class Scheduler(SchedulerInterface):
                 req_index += 1
                 continue
 
+            # Synchronous V2 decode knows the actual draft count. Near the
+            # model-length boundary shorten that count before enforcing full
+            # verification, otherwise the full-batch guard can defer forever.
+            # Async placeholders need separate handling: do not alter them here.
+            if (
+                self.use_v2_model_runner
+                and not self.scheduler_config.async_scheduling
+                and request.spec_token_ids
+                and not request.is_prefill_chunk
+            ):
+                terminal_slots = (
+                    self.max_model_len
+                    - request.num_computed_tokens
+                    - self.num_sampled_tokens_per_step
+                )
+                draft_limit = max(
+                    0, terminal_slots - self.num_sampled_tokens_per_step
+                )
+                if terminal_slots > 0 and len(request.spec_token_ids) > draft_limit:
+                    request.spec_token_ids = request.spec_token_ids[:draft_limit]
+
             num_new_tokens = (
                 request.num_tokens_with_spec
                 + request.num_output_placeholders

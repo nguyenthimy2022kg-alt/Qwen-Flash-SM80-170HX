@@ -85,7 +85,7 @@ class ServeTests(unittest.TestCase):
     def test_preflight_checks_local_image_without_pulling(self):
         success = subprocess.CompletedProcess([], 0, "ok", "")
         missing = subprocess.CompletedProcess([], 1, "", "No such container")
-        with patch.object(serve.sp, "run", side_effect=[success, success, missing]) as run:
+        with patch.object(serve.sp, "run", side_effect=[success, success, missing, subprocess.CompletedProcess([], 0, "", "")]) as run:
             serve.check_docker(self.config(), "test")
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(commands[1][-1], self.config()["image"])
@@ -93,6 +93,11 @@ class ServeTests(unittest.TestCase):
         with patch.object(serve.sp, "run", return_value=success):
             with self.assertRaisesRegex(RuntimeError, "同名容器"):
                 serve.check_docker(self.config(), "test")
+
+    def test_another_managed_service_blocks_duplicate_model_load(self):
+        with patch.object(serve.sp, "run", return_value=subprocess.CompletedProcess([], 0, "running-model\n", "")):
+            with self.assertRaisesRegex(RuntimeError,"重复加载"):
+                serve.check_active_service()
 
     def test_failed_preflight_does_not_submit_background_start(self):
         with tempfile.TemporaryDirectory() as td:

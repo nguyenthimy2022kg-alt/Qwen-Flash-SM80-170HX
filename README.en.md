@@ -6,14 +6,16 @@
 
 Uses **GDS direct SSD reads**, **TEP2 tensor and expert parallelism**, **MTP6 speculative decoding**, and specialized kernels to run the NVFP4 main model on two CMP 170HX GPUs. The approximately 51.2 GB PLE lookup table stays on SSD, with rows read into VRAM as needed.
 
-Completed single-request long-output tests with **8K–128K input: 151.05–168.29 tok/s decode throughput**, all ending naturally. A separate short-prompt run before packaging recorded **170.826 tok/s**. The task instruction was **“写个网站网页”** (“Build a web page”) in all cases. **With shorter reasoning, output speed can reach approximately 200 tok/s.**
+**Historical benchmark (September 8, RadixArk checkpoint):** completed single-request long-output tests with **8K–128K input: 151.05–168.29 tok/s decode throughput**, all ending naturally. A separate short-prompt run before packaging recorded **170.826 tok/s**. The task instruction was **“写个网站网页”** (“Build a web page”) in all cases. **With shorter reasoning, output speed can reach approximately 200 tok/s.**
 
 Validated hardware: **two CMP 170HX GPUs (SM80, approximately 63.39 GiB available VRAM each)**. The model and software versions are pinned; other SM80 devices and models have not been validated. Working GPU P2P and NVMe GDS are prerequisites; the container does not configure host drivers.
 
 [Deployment guide](docs/DEPLOYMENT.en.md) · [Hardware and connectivity](docs/REFERENCE_HARDWARE.en.md) · [API connection](#api-connection) · [Integrated optimizations](#integrated-optimizations)
 
-**v0.1.7 multi-turn stability update:** expands QSA kernel preloading, adds ordered PLE handoff for large input batches, and removes extra diagnostic logging. Rebuild the image when upgrading; see [upgrade steps](docs/DEPLOYMENT.en.md#upgrading-an-existing-deployment). Performance figures below are from earlier versions; this update has not been re-benchmarked.
+**v0.2.0:** the current runtime uses the **NVIDIA NVFP4 checkpoint**, with MTP6 + verified history drafts, lower host memory use, finer prefix matching, and small-message PCIe communication. Follow the [migration instructions](docs/DEPLOYMENT.en.md#upgrading-an-existing-deployment); old model data must not be mixed with the NVIDIA checkpoint. [Release validation](docs/RELEASE_VALIDATION.en.md).
 
+
+Publication regression: **28 functional/context requests + 20 continuous conversation turns** passed, including approximately 260K input with follow-ups. This is bounded validation; see the report above.
 
 ## Project highlights
 
@@ -21,7 +23,7 @@ Validated hardware: **two CMP 170HX GPUs (SM80, approximately 63.39 GiB availabl
 - **Avoids approximately 47.68 GiB of full-table VRAM storage:** the **51.2 GB** FP8 PLE table stays on SSD, without keeping the entire table resident in VRAM or host RAM. GPUs retain the required data and working buffers. This figure is for one complete table, not a per-GPU saving.
 - **From approximately 38 to 170.826 tok/s:** **4.50× the initial deployment's throughput, or roughly a 350% increase**. Code-heavy outputs have approached **200 tok/s**. These are results from different stages of the project, not a controlled comparison against stock vLLM.
 
-## 8K–128K benchmark
+## Historical 8K–128K benchmark
 
 Task prompt: **“写个网站网页”** (“Build a web page”), preceded by web-design reference text to reach each input length. **Thinking enabled, using the template's default `xhigh` (highest supported level), without a separate thinking budget.** TEP2 + MTP6; output limit: 50,000 tokens. One run per length, all ending naturally. Both reasoning and answer tokens count toward output.
 
@@ -62,27 +64,28 @@ Use the base URL or full endpoint as required by the client. The default service
 
 ## Integrated optimizations
 
-| Optimization | Implementation | Recorded result |
-|---|---|---|
-| GDS + PLE integration | Direct cuFile reads into VRAM, with input preparation and buffer lifecycle integration | Data and lifecycle validation passed; no isolated whole-model speedup measured |
-| C++ read planner | Moves read planning out of Python to reduce object creation | Historical 4,096-row planning: 8.655 → 1.188 ms; local operation only |
-| Persistent read threads and fixed buffers | Reuses threads, handles, and workspaces | 32 read threads and 3 buffer slots |
-| In-process asynchronous reads and handoff fix | Overlaps I/O with compute and prevents premature input reuse | Historical combined version: 51.33 → 66.74 tok/s; not an isolated gain |
-| TEP2 and P2P communication | Tensor + expert parallelism with direct GPU communication | Earlier MTP6 five-run aggregates: TEP2 131.044, TP2 127.820 tok/s |
-| HC single-row GEMV | Specialized matrix-vector kernels for single-row state mixing | TP2 comparison at that stage: 74.55 → 80.02 tok/s |
-| TileLang input projection | Fuses single-row QKVZ/BA projections and reuses output buffers | Integrated; no isolated whole-model gain measured |
-| CUDA Graph and fused operators | Reuses execution graphs to reduce kernel submission overhead | Retains overall graph execution and the existing MTP GDN fused path |
-| MTP6 + seven-row PLE planning | NumPy fast path for row planning during multi-token verification | Earlier five-run aggregate: 131.044 tok/s; later single run: 158.013 tok/s |
-| Full-vocabulary INT8 draft scoring + BF16 reranking | Scores the full vocabulary in INT8, reranks each GPU's top 32 candidates using BF16 weights, then combines results | Single run: 170.826 tok/s; historical predecessor: 158.013, an observed difference of about 8.1% |
-| Host-memory protection during loading | Limits container memory and stops the managed service when available host memory falls below a threshold | Includes loading fixes and memory protection; not counted as a decode gain |
+| Area | Current implementation |
+|---|---|
+| SSD → GPU | GDS/cuFile PLE reads, C++ planning, 32 persistent readers, 3 reusable staging slots and ordered asynchronous handoff |
+| Parallel execution | TEP2 (tensor parallelism + expert parallelism), Marlin and GPU P2P |
+| Draft generation | MTP6 for new text; verified history matches propose 16 or 32 tokens. The configured capacity of 32 does **not** mean MTP32. |
+| Draft scoring | Full-vocabulary INT8 screening, BF16 candidate reranking and an 8-candidate probability distribution used consistently by drafting and verification |
+| Target scoring | Compact candidate communication with full-vocabulary fallbacks when required |
+| Small compute shapes | HC GEMV, TileLang single-row projections, fused seven-row HC/GDN computation and CUDA Graph replay |
+| Communication | FlashInfer PCIe IPC AllReduce for eligible BF16 `[1/7/33, 2560]` tensors; existing paths for other shapes |
+| Multi-turn cache | Prefix matching in 36-token units; physical cache blocks remain 3,456 tokens |
+| Host memory | Selective CUDA loading, targeted kernel preloading, streaming checkpoint preparation and memory limits |
+| Stability | PLE handoff synchronization, context-boundary completion fixes and prewarmed sampling fallbacks |
 
-Results come from different stages and conditions and **must not be added or multiplied**. The INT8 runs generated different content; the 8.1% difference does not establish an isolated quantization benefit. [Detailed historical records (Chinese)](docs/性能记录.md).
+The supported configuration is **two SM80 GPUs, one active request, synchronous scheduling**. Maximum combined context is 262,144 tokens; the configured output limit is also 262,144 and remains constrained by available context. Image input is configurable up to 128 images, but this is a limit rather than a claim that every 128-image request fits. Thinking, preserved reasoning history and tool parsing remain enabled by default.
+
+Local measurements before packaging found approximately **1.51–1.91 ms less latency per MTP6 verification cycle** from the communication change. Acceptance rate and output content affect tokens/s; this is not a universal throughput gain. The historical table above is not a benchmark of the NVIDIA checkpoint or v0.2.0.
 
 ## Repository layout
 
 - `src/`: runtime source overlay for the pinned upstream version, including GDS, HC, TileLang, and draft INT8.
 - `csrc/`: C++ source for the GDS reader extensions, compiled during the image build.
-- `src/preload/`: approximately 18 MB of preloaded Triton kernels and SHA256 manifests for this fixed SM80 environment; no model weights.
+- `src/preload/`, `src/memory_extra_preload/`: approximately 24 MB of preloaded Triton kernels and SHA256 manifests for this fixed SM80 environment; no model weights.
 - `patches/`: upstream source hashes and provenance information to prevent overwriting incompatible versions.
 - `config/`, `scripts/`: configuration examples, service control, data preparation, and build tools. CLI messages currently remain in Chinese.
 - `docs/`: performance, deployment, and validation records. English deployment, CMP P2P, and NVMe GDS guides are available; detailed historical records remain in Chinese.

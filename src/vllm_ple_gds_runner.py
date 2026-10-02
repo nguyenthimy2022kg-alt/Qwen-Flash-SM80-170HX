@@ -3044,7 +3044,7 @@ def install_runner_hooks() -> None:
             assert parallel.pipeline_parallel_size == 1 and parallel.tensor_parallel_size == 2
             spec = self.vllm_config.speculative_config
             if spec is not None:
-                assert spec.method == "mtp" and spec.num_speculative_tokens == 6
+                assert spec.method == "mtp" and spec.num_speculative_tokens == 32
                 logger.warning("Experimental TP2 input-driven GDS with native MTP6 enabled")
             assert _enabled("VLLM_PLE_GDS_INPUT_DRIVEN") and not _enabled("VLLM_PLE_GDS_IPC_PROCESS")
             layers = [m for m in self.model.modules() if getattr(m, "_ple_gds_patched", False)]

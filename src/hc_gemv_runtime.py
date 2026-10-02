@@ -80,7 +80,8 @@ def instrument_source(source, key):
         lines[i] = indent + rewritten + '\n'
     if edits:
         assert 'from __future__ import' not in source
-        return 'import hc_gemv_runtime as _hc_gemv\n' + ''.join(lines), len(edits)
+        from m7_joint_runtime import instrument
+        return instrument('import hc_gemv_runtime as _hc_gemv\n' + ''.join(lines)), len(edits)
     return source, 0
 
 
@@ -100,6 +101,11 @@ def install(_runner_cls=None):
     def reload(key, path, *args, **kwargs):
         if path not in changed:
             original = Path(path).read_text()
+            if 'import hc_gemv_runtime as _hc_gemv' in original and 'import m7_joint_runtime as _m7_joint' not in original:
+                from m7_joint_runtime import instrument
+                original = instrument(original)
+                compile(original, path, 'exec')
+                Path(path).write_text(original)
             if 'import hc_gemv_runtime as _hc_gemv' not in original:
                 source, count = instrument_source(original, key)
                 if count:
@@ -123,7 +129,8 @@ def install(_runner_cls=None):
             record = dict(rank=rank, decode_query_len=self.decode_query_len,
                           manager=type(self).__name__,
                           graph_descriptors=[str(d) for d in self.graphs],
-                          dispatch_unchanged=True, no_mtp_coverage_guard_skipped=True)
+                          dispatch_unchanged=True, no_mtp_coverage_guard_skipped=True,
+                          m7_unique_weights={k:len(v) for k,v in __import__('m7_joint_runtime')._weights.items()})
             Path(f'/evidence/hc-mtp-graphs-rank{rank}-{type(self).__name__}-{self.decode_query_len}.json').write_text(json.dumps(record, indent=2))
             print('hc_MTP_GRAPHS_READY', rank, self.decode_query_len, flush=True)
             return result

@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-02",
+  "version": "0.2.0",
+  "live_requests": 28,
+  "continuous_conversation_rounds": 20,
+  "complete_requests": 47,
+  "intentional_cancellations": 1,
+  "generated_tokens": 9883,
+  "context_inputs": [
+    {
+      "tokens": 131068,
+      "target": 131072,
+      "records": 5460
+    },
+    {
+      "tokens": 259996,
+      "target": 260000,
+      "records": 10832
+    },
+    {
+      "tokens": 32764,
+      "target": 32768,
+      "records": 1364
+    },
+    {
+      "tokens": 8188,
+      "target": 8192,
+      "records": 340
+    }
+  ],
+  "final_soak_prompt_tokens": 6163,
+  "cpu_tests": 33,
+  "gpu_communication": "two ranks passed 7 shape cases, strided fallback and 21 interleaved graph replays",
+  "model_source": {
+    "repo_id": "nvidia/Qwen3.8-Flash-Next-NVFP4",
+    "revision": "fc694b54fb0174e0913e6adf86691ef85a4ead47",
+    "metadata_sha256": {
+      "config.json": "deef67a61f3311faf051b23dc4192f442c7fee4f9cd2f38cbcbe4da55c763a80",
+      "model.safetensors.index.json": "660414e8300728ba80062e6a3c81cb76a65e2ab136ac9e9ceb450ba0c51c3c0d"
+    },
+    "indexed_safetensors_files": 11,
+    "indexed_safetensors_bytes": 132680249378,
+    "ple_rows": 320001536,
+    "ple_columns": 160,
+    "ple_dtype": "F8_E4M3",
+    "mtp_tensors": 3101,
+    "mtp_dtype_counts": {
+      "BF16": 1565,
+      "F8_E4M3": 1536
+    }
+  },
+  "candidate_image_id": "sha256:7ec5dd648bf3ba99bf02727b7fbf0e7bd0f8fd6ab8f9e21e035b6bf13edb06d6",
+  "limitations": [
+    "bounded regression, not indefinite uptime",
+    "two-image smoke; not 128-image capacity validation",
+    "no new full quality benchmark against stock vLLM",
+    "one host, TEP2, one active request, synchronous scheduling"
+  ],
+  "service_exit_code": 0,
+  "oom_killed": false,
+  "new_xid_count": 0,
+  "measured_host_memory": {
+    "container_peak_bytes": 21575536640,
+    "final_container_bytes": 17893945344,
+    "final_swap_bytes": 2902437888,
+    "note": "cgroup memory includes file cache; not model PSS and not VRAM"
+  },
+  "final_build_verification": {
+    "final_image_id": "sha256:ed099190a147772c6ce562cd4845e24704e455d9a526c4c38162395de234b56a",
+    "runtime_files_verified": 596,
+    "python_ast_equal_to_gpu_tested_image": true,
+    "all_kernel_and_native_binary_hashes_equal": true,
+    "non_execution_change": "removed unused source-path metadata from preload manifest"
+  }
+}

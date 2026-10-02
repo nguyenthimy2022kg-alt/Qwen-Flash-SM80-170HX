@@ -1,4 +1,4 @@
-"""Set EAGER before spawned GPU interpreters start; restore parent environment."""
+"""Set selected CUDA loading mode before spawned GPU interpreters start; restore parent environment."""
 from contextlib import contextmanager
 import os
 import threading
@@ -11,7 +11,9 @@ def gpu_worker_loading(start_method):
         raise RuntimeError('Scoped CUDA loading requires spawn, not inherited CUDA state')
     with _lock:
         before=os.environ.get('CUDA_MODULE_LOADING')
-        os.environ['CUDA_MODULE_LOADING']='EAGER'
+        mode=os.environ.get('Q38_WORKER_CUDA_LOADING','LAZY').upper()
+        if mode not in ('LAZY','EAGER'):raise RuntimeError('Invalid Q38_WORKER_CUDA_LOADING')
+        os.environ['CUDA_MODULE_LOADING']=mode
         try:
             yield
         finally:

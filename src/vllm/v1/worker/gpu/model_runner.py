@@ -1472,33 +1472,36 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         input_batch: InputBatch,
         grammar_output: GrammarOutput | None,
     ) -> tuple[SamplerOutput, torch.Tensor, torch.Tensor]:
-        sample_hidden_states = hidden_states[input_batch.logits_indices]
-        logits = self.model.compute_logits(sample_hidden_states)
-        if grammar_output is not None:
-            # Apply grammar bitmask to the logits in-place.
-            assert self.structured_outputs_worker is not None
-            self.structured_outputs_worker.apply_grammar_bitmask(
-                logits,
-                input_batch,
-                grammar_output.structured_output_request_ids,
-                grammar_output.grammar_bitmask,
-            )
+        from q38_compact_vocab import target_sampling
+        with target_sampling(self, input_batch, grammar_output):
+            sample_hidden_states = hidden_states[input_batch.logits_indices]
+            logits = self.model.compute_logits(sample_hidden_states)
+            if grammar_output is not None:
+                # Apply grammar bitmask to the logits in-place.
+                assert self.structured_outputs_worker is not None
+                self.structured_outputs_worker.apply_grammar_bitmask(
+                    logits,
+                    input_batch,
+                    grammar_output.structured_output_request_ids,
+                    grammar_output.grammar_bitmask,
+                )
 
-        if input_batch.num_draft_tokens == 0 or self.rejection_sampler is None:
-            assert self.sampler is not None
-            sampler_output = self.sampler(logits, input_batch)
-        else:
-            # Rejection sampling for spec decoding.
-            assert self.rejection_sampler is not None
-            assert self.speculator is not None
-            sampler_output = self.rejection_sampler(
-                logits,
-                input_batch,
-                # Draft logits are needed for probabilistic rejection sampling.
-                self.speculator.draft_logits,
-            )
+            if input_batch.num_draft_tokens == 0 or self.rejection_sampler is None:
+                assert self.sampler is not None
+                sampler_output = self.sampler(logits, input_batch)
+            else:
+                # Rejection sampling for spec decoding.
+                assert self.rejection_sampler is not None
+                assert self.speculator is not None
+                sampler_output = self.rejection_sampler(
+                    logits,
+                    input_batch,
+                    # Draft logits are needed for probabilistic rejection sampling.
+                    __import__('sparse_draft').verification_logits(self.speculator),
+                )
 
-        return sampler_output, sampler_output.num_sampled, sampler_output.num_rejected
+            return sampler_output, sampler_output.num_sampled, sampler_output.num_rejected
+
 
     def postprocess_sampled(
         self,
@@ -1805,6 +1808,13 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         # prepare_inputs has finalized MRV2's GPU buffers. Record readiness so
         # the request thread can stage them before the PLE placeholder runs.
         if self._ple_offload_connector is not None:
+            # Token count does not establish FULL-graph coverage: short prefill
+            # tails can execute dynamic calls below the old 112-token cutoff.
+            # Finish PLE communication before those calls can allocate/load.
+            if hasattr(self._ple_offload_connector, "serialize_large_inputs"):
+                self._ple_offload_connector.require_serial_input = (
+                    batch_desc.cg_mode != CUDAGraphMode.FULL
+                )
             self._ple_offload_connector.prepare_forward(
                 input_batch.num_reqs,
                 input_batch.num_tokens_after_padding,
@@ -2015,6 +2025,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             if hasattr(self.model, "get_mtp_target_hidden_states"):
                 pre_hc_hidden_states = self.model.get_mtp_target_hidden_states()
                 spec_hidden_states = pre_hc_hidden_states[: hidden_states.shape[0]]  # type: ignore[union-attr]
+            from ngram_hybrid_runtime import prepare_hybrid
+            prepare_hybrid(self, input_batch, num_sampled)
             with use_workspace_lane(self._draft_workspace_lane):
                 draft_tokens = self.speculator.propose(
                     input_batch,
@@ -2041,6 +2053,7 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         if self.num_speculative_steps > 0:
             # Spec-decode and diffusion LLMs both use draft tokens but the latter does
             # not have a speculator (i.e. self.speculator is None)
+            self.draft_tokens_handler.hybrid_length = self.speculator.hybrid_length
             self.draft_tokens_handler.set_draft_tokens(
                 input_batch,
                 self.req_states.draft_tokens[input_batch.idx_mapping],

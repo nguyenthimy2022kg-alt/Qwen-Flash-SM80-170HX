@@ -26,6 +26,9 @@ class Runtime:
         self.kernel = None
 
     def proj(self, x, q, a, y, z, *, site):
+        from m7_joint_runtime import project
+        if project(x, q, a, y, z):
+            return
         if not supported(x, q, a, y, z) or torch.cuda.get_device_capability(x.device) != (8, 0):
             torch.mm(x, q, out=y)
             torch.mm(x, a, out=z)

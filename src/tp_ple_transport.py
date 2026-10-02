@@ -44,9 +44,16 @@ class TpPleTransport:
   assert 0<num_tokens<=self.max_tokens
   if dummy_run:return self.signal_dummy_outputs(num_tokens)
   self.active=True;self.dummy=False;self.tokens=num_tokens;self.sequence+=1
-  # This deployment captures up to 112 tokens. Larger batches use dynamic
-  # model calls and may allocate/load kernels while a peer NCCL kernel waits.
-  serial=self.serialize_large_inputs and num_tokens>112
+  # The runner supplies actual graph dispatch. Dynamic short prefill tails
+  # can be below any token-count cutoff and still allocate/load CUDA code.
+  dynamic=getattr(self,"require_serial_input",False)
+  serial=self.serialize_large_inputs and (dynamic or num_tokens>112)
+  if serial:
+   self._counts['serialized']=self._counts.get('serialized',0)+1
+   if dynamic and num_tokens<=112:
+    self._counts['short_dynamic_serialized']=self._counts.get('short_dynamic_serialized',0)+1
+    if self._counts['short_dynamic_serialized']==1:
+     print('TP_PLE_SHORT_DYNAMIC_GUARD',self.rank,'tokens',num_tokens,flush=True)
   if serial:
    torch.cuda.current_stream(self.device).synchronize()
   failure=None

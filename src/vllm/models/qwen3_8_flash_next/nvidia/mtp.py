@@ -132,6 +132,14 @@ def _make_draft_vllm_config(
                 _remap_ignored_layers(exclude_modules, mtp_start_layer_idx),
             )
 
+    if draft_quant_config is not None:
+        quantized_layers = getattr(draft_quant_config, "quantized_layers", None)
+        if quantized_layers:
+            draft_quant_config.quantized_layers = {
+                _remap_ignored_layers([name], mtp_start_layer_idx)[0]: info
+                for name, info in quantized_layers.items()
+            }
+
     draft_vllm_config = replace(
         vllm_config,
         model_config=speculative_config.draft_model_config,

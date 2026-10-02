@@ -17,6 +17,6 @@ def main():
             errors.append(rel+': upstream content mismatch')
     if errors:raise SystemExit('\n'.join(errors))
     shutil.copytree(root/'src',args.target,dirs_exist_ok=True)
-    print(f'上游校验通过，已安装 {len(expected)} 个增量 Python 文件。')
+    print(f'上游校验通过，已安装 {len(expected)} 个增量文件。')
 
 if __name__=='__main__':main()
