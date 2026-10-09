@@ -1,0 +1,16 @@
+[Unit]
+Description=Copy the qwen-flash PLE artifact onto a RAM disk
+RequiresMountsFor=/data/ple-gds
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Replace the paths here and in RequiresMountsFor with this host's paths.
+Environment=PLE_SOURCE=/data/ple-gds
+Environment=PLE_IDENTITY=/opt/Qwen-Flash-SM80-170HX/config/local-ple-identity.json
+ExecStart=/usr/local/sbin/ple-ram-setup.sh
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

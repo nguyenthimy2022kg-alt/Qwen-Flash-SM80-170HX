@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import array
+import logging
 import operator
 import queue
 import threading
@@ -15,6 +16,8 @@ from typing import Any
 import torch
 
 from .compact import load_current_compact
+
+logger = logging.getLogger(__name__)
 
 
 class ChunkedReadRequired(ValueError):
@@ -225,6 +228,12 @@ class PersistentGdsPleReader:
             self.pin_workers,
             self.poll_mode,
         )
+        if self._native.stats()["host_read"]:
+            logger.warning(
+                "PLE reader %s: Q38_PLE_HOST_READ=1, sync_mt reads use pread into pinned host memory "
+                "and cuMemcpyHtoDAsync instead of GPUDirect Storage",
+                self.data_path,
+            )
         self.global_scale = self._load_global_scale()
 
     @staticmethod
