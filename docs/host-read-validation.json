@@ -1,0 +1,45 @@
+{
+  "date_local": "2026-10-09",
+  "timezone": "America/Los_Angeles",
+  "pr": "https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX/pull/2",
+  "default_host_read": false,
+  "cpu_tests_passed": 47,
+  "gpu": {
+    "model": "CMP 170HX",
+    "architecture": "sm80",
+    "workers": 32,
+    "storage": "NVMe SSD"
+  },
+  "checks": {
+    "strict_gds": {
+      "rounds": 20,
+      "rows": 1217180,
+      "byte_identical": true
+    },
+    "host_read_ssd": {
+      "rounds": 20,
+      "rows": 1217180,
+      "byte_identical": true
+    },
+    "close_with_queued_copies": {
+      "rows": 2048,
+      "byte_identical": true,
+      "queue_pending_before_close": true,
+      "queue_complete_after_close": true,
+      "repeated_close": true
+    },
+    "strict_rejects_compatibility": true
+  },
+  "runtime_files": 596,
+  "changed_runtime_files": {
+    "ple_gds/_persistent_native.cpython-312-x86_64-linux-gnu.so": "f4ba92d26b91989ce20393e333c6b4a71cfc859a9bdc2be5ff998e2b93ffc110",
+    "ple_gds/persistent_reader.py": "2edc2ee3ed9fc842eb1719aea8be9ac89fe39add386dbc4821d3fd449029061f"
+  },
+  "not_tested_here": [
+    "full-model endurance for the new path",
+    "full-size brd RAM disk",
+    "other hosts"
+  ],
+  "local_default_image_replaced": false,
+  "model_left_running": false
+}

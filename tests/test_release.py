@@ -15,6 +15,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn('/:/host-root:ro',cmd);self.assertIn('GPU-test-a,GPU-test-b',next(x.split('=',1)[1] for x in cmd if x.startswith('CUDA_VISIBLE_DEVICES=')))
         self.assertIn('--enable-expert-parallel',cmd)
         self.assertIn('Q38_PLE_SERIALIZE_LARGE_INPUTS=1',cmd)
+        self.assertIn('Q38_PLE_HOST_READ=0',cmd)
         self.assertEqual(cmd[cmd.index('--tensor-parallel-size')+1],'2')
         self.assertEqual(cmd[cmd.index('--pipeline-parallel-size')+1],'1')
         self.assertEqual(json.loads(cmd[cmd.index('--speculative-config')+1])['num_speculative_tokens'],32)

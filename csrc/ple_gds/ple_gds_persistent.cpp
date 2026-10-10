@@ -13,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <cctype>
+#include <cerrno>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -21,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <cstdlib>
 #include <string>
 #include <thread>
 #include <vector>
@@ -235,6 +237,8 @@ public:
         if (!lane_capacity_) {
             throw std::runtime_error("staging slot is too small for one aligned lane per worker");
         }
+        const char* host_read = std::getenv("Q38_PLE_HOST_READ");
+        host_read_ = host_read && std::string(host_read) == "1";
         check_cuda(cuInit(0), "cuInit");
         int count = 0;
         check_cuda(cuDeviceGetCount(&count), "cuDeviceGetCount");
@@ -277,7 +281,8 @@ public:
             CUfileDrvProps_t properties{};
             check_cufile(cuFileDriverGetProperties(&properties), "cuFileDriverGetProperties");
             driver_control_flags_ = properties.nvfs.dcontrolflags;
-            if (driver_control_flags_ & (1U << CU_FILE_ALLOW_COMPAT_MODE)) {
+            // Host-read workers never call cuFile, so compatibility mode only reaches the one-off sync reads.
+            if ((driver_control_flags_ & (1U << CU_FILE_ALLOW_COMPAT_MODE)) && !host_read_) {
                 throw std::runtime_error("cuFile compatibility mode is enabled");
             }
             const unsigned int driver_limit = properties.max_batch_io_size ? properties.max_batch_io_size : 128;
@@ -345,6 +350,9 @@ public:
                 check_cuda(cuEventCreate(&managed.gather_end, CU_EVENT_DEFAULT), "cuEventCreate(gather_end)");
                 check_cuda(cuEventCreate(&managed.consumer_done, CU_EVENT_DISABLE_TIMING),
                            "cuEventCreate(consumer_done)");
+            }
+            if (host_read_) {
+                check_cuda(cuEventCreate(&host_copy_done_, CU_EVENT_DISABLE_TIMING), "cuEventCreate(host_copy_done)");
             }
             start_workers();
             for (std::size_t index = 0; index < slots_.size(); ++index) {
@@ -576,7 +584,29 @@ public:
                 }
                 metrics.io_wait_seconds = seconds_since(io_start);
             } else if (mode == "sync_mt") {
+                if (host_read_ && host_copy_recorded_) {
+                    check_cuda(cuEventSynchronize(host_copy_done_), "cuEventSynchronize(host_copy_done)");
+                }
                 sync_mt_read(slot, ranges, &metrics);
+                if (host_read_) {
+                    // Copy on the caller's stream: a per-worker stream stalled behind the model stream's PLE wait.
+                    try {
+                        for (std::size_t lane = 0; lane < workers_.size(); ++lane) {
+                            const std::uint64_t used = workers_[lane]->host_used;
+                            if (!used) continue;
+                            check_cuda(cuMemcpyHtoDAsync(slot.staging + lane * lane_capacity_,
+                                                         workers_[lane]->host_lane, used, stream),
+                                       "cuMemcpyHtoDAsync(host lane)");
+                        }
+                        check_cuda(cuEventRecord(host_copy_done_, stream), "cuEventRecord(host_copy_done)");
+                        host_copy_recorded_ = true;
+                    } catch (...) {
+                        // A later enqueue can fail after earlier copies were submitted.
+                        // They must finish before the lanes can be refilled or freed.
+                        cuStreamSynchronize(stream);
+                        throw;
+                    }
+                }
             } else if (mode == "async") {
                 if (!measure_gpu) {
                     throw std::runtime_error("diagnostic async requires synchronous result validation");
@@ -584,6 +614,7 @@ public:
                 async_read(slot, ranges, stream, &metrics);
                 metrics.bytes_read = expected_read;
             } else if (mode == "batch") {
+                if (host_read_) throw std::runtime_error("batch mode needs worker cuFile handles; unset Q38_PLE_HOST_READ");
                 batch_read(slot, ranges, &metrics);
             } else {
                 throw std::runtime_error("mode must be 'sync', 'sync_mt', 'async', or 'batch'");
@@ -690,9 +721,14 @@ public:
     void close() {
         std::lock_guard<std::mutex> close_lock(close_mutex_);
         if (closed_) return;
-        stop_workers();
+        // Exclude new reads until all worker buffers have been freed.
         std::lock_guard<std::mutex> binding_lock(output_binding_mutex_);
         ContextGuard guard(context_);
+        if (host_read_) {
+            // Workers free their host lanes when they stop; no queued copy may still read them.
+            if (host_copy_recorded_) cuEventSynchronize(host_copy_done_);
+        }
+        stop_workers();
         for (auto& owned_slot : slots_) {
             Slot& slot = *owned_slot;
             std::lock_guard<std::mutex> lock(slot.mutex);
@@ -722,6 +758,8 @@ public:
             if (slot.consumer_done) cuEventDestroy(slot.consumer_done);
         }
         slots_.clear();
+        if (host_copy_done_) cuEventDestroy(host_copy_done_);
+        host_copy_done_ = nullptr;
         if (module_) cuModuleUnload(module_);
         if (file_handle_) cuFileHandleDeregister(file_handle_);
         if (driver_open_) cuFileDriverClose();
@@ -769,6 +807,7 @@ public:
     unsigned int worker_count() const { return requested_worker_count_; }
     bool pin_workers() const { return pin_workers_; }
     bool poll_mode() const { return poll_mode_; }
+    bool host_read() const { return host_read_; }
 
 private:
     static std::size_t metadata_workspace_bytes_for(std::uint64_t max_spans) {
@@ -784,6 +823,8 @@ private:
         std::thread thread;
         int fd = -1;
         CUfileHandle_t file_handle = nullptr;
+        void* host_lane = nullptr;
+        std::uint64_t host_used = 0;
         bool initialized = false;
         int cpu = -1;
         std::string initialization_error;
@@ -810,7 +851,7 @@ private:
             }
         }
         file_open_count_ += requested_worker_count_;
-        handle_registration_count_ += requested_worker_count_;
+        if (!host_read_) handle_registration_count_ += requested_worker_count_;
     }
 
     void worker_loop(Worker* worker, unsigned int index) noexcept {
@@ -833,11 +874,19 @@ private:
             if (worker->fd < 0) {
                 throw std::runtime_error("worker open(O_DIRECT): " + std::string(std::strerror(errno)));
             }
-            CUfileDescr_t descriptor{};
-            descriptor.type = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
-            descriptor.handle.fd = worker->fd;
-            check_cufile(cuFileHandleRegister(&worker->file_handle, &descriptor),
-                         "worker cuFileHandleRegister");
+            if (host_read_) {
+                check_cuda(cuMemHostAlloc(&worker->host_lane, lane_capacity_, 0), "cuMemHostAlloc(worker lane)");
+            } else {
+                CUfileDescr_t descriptor{};
+                descriptor.type = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
+                descriptor.handle.fd = worker->fd;
+                check_cufile(cuFileHandleRegister(&worker->file_handle, &descriptor),
+                             "worker cuFileHandleRegister");
+            }
+            const auto fail = [this](const std::string& message) {
+                std::lock_guard<std::mutex> lock(work_mutex_);
+                if (!work_failed_.exchange(true)) work_error_ = message;
+            };
             {
                 std::lock_guard<std::mutex> lock(work_mutex_);
                 worker->initialized = true;
@@ -858,6 +907,33 @@ private:
                 std::uint64_t local_ios = 0;
                 if (!active_ranges_) {
                     work_failed_.store(true, std::memory_order_relaxed);
+                } else if (host_read_) {
+                    // read() copies the lane prefix [0, host_used) in one transfer.
+                    auto* host = static_cast<char*>(worker->host_lane);
+                    std::uint64_t used = 0;
+                    worker->host_used = 0;
+                    for (const Range& range : *active_ranges_) {
+                        if (work_failed_.load(std::memory_order_relaxed)) break;
+                        if (range.staging_offset / lane_capacity_ != index) continue;
+                        const std::uint64_t lane_offset = range.staging_offset % lane_capacity_;
+                        std::uint64_t done = 0;
+                        while (done < range.size) {
+                            const ssize_t got = pread(worker->fd, host + lane_offset + done, range.size - done,
+                                                      static_cast<off_t>(range.file_offset + done));
+                            if (got < 0 && errno == EINTR) continue;
+                            if (got <= 0) {
+                                fail(got < 0 ? "sync_mt pread failed: " + std::string(std::strerror(errno))
+                                             : "sync_mt pread short read");
+                                break;
+                            }
+                            done += static_cast<std::uint64_t>(got);
+                        }
+                        if (done != range.size) break;
+                        used = std::max(used, lane_offset + range.size);
+                        local_bytes += range.size;
+                        ++local_ios;
+                    }
+                    worker->host_used = used;
                 } else {
                     for (const Range& range : *active_ranges_) {
                         if (work_failed_.load(std::memory_order_relaxed)) break;
@@ -890,11 +966,15 @@ private:
                     if (--workers_pending_ == 0) work_done_cv_.notify_one();
                 }
             }
+            if (worker->host_lane) cuMemFreeHost(worker->host_lane);
+            worker->host_lane = nullptr;
             if (worker->file_handle) cuFileHandleDeregister(worker->file_handle);
             worker->file_handle = nullptr;
             if (worker->fd >= 0) ::close(worker->fd);
             worker->fd = -1;
         } catch (const std::exception& exc) {
+            if (worker->host_lane) cuMemFreeHost(worker->host_lane);
+            worker->host_lane = nullptr;
             if (worker->file_handle) cuFileHandleDeregister(worker->file_handle);
             if (worker->fd >= 0) ::close(worker->fd);
             worker->file_handle = nullptr;
@@ -1096,6 +1176,9 @@ private:
     unsigned int requested_worker_count_ = 0;
     bool pin_workers_ = false;
     bool poll_mode_ = false;
+    bool host_read_ = false;
+    CUevent host_copy_done_ = nullptr;
+    bool host_copy_recorded_ = false;
     std::vector<std::unique_ptr<Slot>> slots_;
     std::vector<std::unique_ptr<Worker>> workers_;
     std::mutex close_mutex_;
@@ -1458,6 +1541,7 @@ PyObject* persistent_stats(PersistentObject* self, PyObject*) {
     set("worker_count", PyLong_FromUnsignedLong(self->state->worker_count()));
     set("pin_workers", PyBool_FromLong(self->state->pin_workers()));
     set("poll_mode", PyBool_FromLong(self->state->poll_mode()));
+    set("host_read", PyBool_FromLong(self->state->host_read()));
     return result;
 }
 

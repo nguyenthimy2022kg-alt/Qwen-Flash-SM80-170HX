@@ -2,6 +2,8 @@
 
 [简体中文](发布检查.md) | **English** · [Home](../README.en.md)
 
+The main branch later added optional host-memory reads; see [PR #2 validation](HOST_READ_VALIDATION.md). The table below remains the historical v0.2.0 validation, not full-model validation of the new path.
+
 Validated on 2026-10-02, on the reference dual CMP 170HX host using the pinned NVIDIA checkpoint, TEP2, one active request and synchronous scheduling. The tested image was rebuilt from the public pinned base and repository sources. It did not mount the development runtime or experimental control directory.
 
 | Check | Result |
@@ -16,7 +18,7 @@ Validated on 2026-10-02, on the reference dual CMP 170HX host using the pinned N
 | Completion and shutdown | 46 `stop`, 1 `tool_calls`, 1 intentional client cancellation; 9,883 reported output tokens; service exit 0, no OOM kill, no new Xid |
 | Duplicate startup | Rejected without disturbing the running model |
 
-The accepted local calculation code was retained. Packaging replaces the experimental control/kernel paths, embeds the active draft override and disables request tracing when tracing is off. Final cleanup removes private source-path metadata and trailing whitespace; 596 installed runtime files were checked against their hashes; Python ASTs and all kernel/native binary hashes match the GPU-tested image. The hashes are recorded in `patches/runtime-sha256.json`.
+The accepted local calculation code was retained. Packaging replaces the experimental control/kernel paths, embeds the active draft override and disables request tracing when tracing is off. Final cleanup removes private source-path metadata and trailing whitespace; 596 installed runtime files were checked against their hashes; Python ASTs and all kernel/native binary hashes match the GPU-tested image. The historical hashes are in the [v0.2.0 manifest](https://github.com/nguyenthimy2022kg-alt/Qwen-Flash-SM80-170HX/blob/v0.2.0/patches/runtime-sha256.json).
 
 Host container peak memory was about 20.09 GiB and final memory about 16.66 GiB, plus about 2.70 GiB swap. These cgroup figures include file cache; they are neither model-only PSS nor GPU memory. No host-memory protection stop occurred.
 

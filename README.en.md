@@ -17,6 +17,8 @@ Validated hardware: **two CMP 170HX GPUs (SM80, approximately 63.39 GiB availabl
 
 Publication regression: **28 functional/context requests + 20 continuous conversation turns** passed, including approximately 260K input with follow-ups. This is bounded validation; see the report above.
 
+**New on main (after v0.2.0)**: optional [PLE reads through host memory](docs/PLE_HOST_READ.en.md) for investigating direct-read failures on other hosts. Disabled by default and requires a rebuild; works with the existing SSD, while the optional RAM disk needs ample host memory.
+
 ## Project highlights
 
 - **Direct SSD-to-GPU PLE reads:** GDS/cuFile reads the required lookup rows without staging the data payload in CPU memory, overlapping reads with model computation. Upstream already supports PLE offload to host RAM; this project adds an SSD-to-GPU path to the pinned upstream version.

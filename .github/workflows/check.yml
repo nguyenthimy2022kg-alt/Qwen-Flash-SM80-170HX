@@ -10,6 +10,6 @@ jobs:
       - name: Python 与 Shell 语法
         run: |
           python3 -m compileall -q src scripts
-          bash -n scripts/build-ple-gds-reader.sh
+          for script in scripts/*.sh; do bash -n "$script"; done
       - name: 发布接口与数据校验
         run: python3 -m unittest discover -s tests -v
