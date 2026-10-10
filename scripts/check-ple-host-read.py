@@ -9,8 +9,6 @@ import os
 import random
 import sys
 
-os.environ["Q38_PLE_HOST_READ"] = "1"
-
 import torch  # noqa: E402
 
 from ple_gds.persistent_reader import PersistentGdsPleReader  # noqa: E402
@@ -18,9 +16,13 @@ from ple_gds.persistent_reader import PersistentGdsPleReader  # noqa: E402
 
 def collect(reader, ids, mode, stream):
     parts = []
-    for lease in reader.iter_read(ids, mode=mode, stream=stream):
-        parts.append(lease.tensor.view(torch.uint8).clone())
-        lease.release(stream)
+    # Gather, clone and release must share a stream to prevent slot-reuse races.
+    with torch.cuda.stream(stream):
+        for lease in reader.iter_read(ids, mode=mode, stream=stream):
+            try:
+                parts.append(lease.tensor.view(torch.uint8).clone())
+            finally:
+                lease.release(stream)
     stream.synchronize()
     return torch.cat(parts)
 
@@ -45,9 +47,14 @@ def main():
     parser.add_argument("--workers", type=int, default=int(os.environ.get("VLLM_PLE_GDS_WORKERS", "32")))
     parser.add_argument("--rounds", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--host-read", type=int, choices=(0, 1), default=1,
+                        help="1 checks host-read; 0 checks strict-GDS workers")
     args = parser.parse_args()
     if not args.gpu_uuid or not args.gpu_bdf:
         parser.error("--gpu-uuid and --gpu-bdf are required (or VLLM_PLE_GDS_GPU_UUID/_BDF)")
+    if args.rounds < 1:
+        parser.error("--rounds must be positive")
+    os.environ["Q38_PLE_HOST_READ"] = str(args.host_read)
 
     reader = PersistentGdsPleReader(
         args.artifact,
@@ -57,9 +64,10 @@ def main():
         pin_workers=True,
         poll_mode=True,
     )
-    if not reader.stats()["host_read"]:
-        sys.exit("reader did not enable host read")
+    if reader.stats()["host_read"] != bool(args.host_read):
+        sys.exit("reader mode does not match --host-read")
     stream = torch.cuda.Stream(device=reader.device)
+    other_stream = torch.cuda.Stream(device=reader.device)
     rng = random.Random(args.seed)
     rows = 0
     try:
@@ -76,18 +84,20 @@ def main():
             first_expected = collect(reader, first_ids, "sync", stream)
             second_expected = collect(reader, second_ids, "sync", stream)
             first = reader.read(first_ids, mode="sync_mt", stream=stream)
-            second = reader.read(second_ids, mode="sync_mt", stream=stream)
+            second = reader.read(second_ids, mode="sync_mt", stream=other_stream)
             stream.synchronize()
+            other_stream.synchronize()
             overlap_ok = (torch.equal(first.tensor.view(torch.uint8), first_expected)
                           and torch.equal(second.tensor.view(torch.uint8), second_expected))
             first.release(stream)
-            second.release(stream)
+            second.release(other_stream)
             if not overlap_ok:
                 sys.exit(f"MISMATCH round {round_index}: back-to-back reads")
             rows += len(first_ids) + len(second_ids)
     finally:
         reader.close()
-    print(f"OK: {args.rounds} rounds, {rows} rows identical between sync (cuFileRead) and sync_mt (host read)")
+    backend = "host read" if args.host_read else "strict GDS"
+    print(f"OK: {args.rounds} rounds, {rows} rows identical between sync (cuFileRead) and sync_mt ({backend})")
 
 
 if __name__ == "__main__":

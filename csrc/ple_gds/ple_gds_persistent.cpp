@@ -590,15 +590,22 @@ public:
                 sync_mt_read(slot, ranges, &metrics);
                 if (host_read_) {
                     // Copy on the caller's stream: a per-worker stream stalled behind the model stream's PLE wait.
-                    for (std::size_t lane = 0; lane < workers_.size(); ++lane) {
-                        const std::uint64_t used = workers_[lane]->host_used;
-                        if (!used) continue;
-                        check_cuda(cuMemcpyHtoDAsync(slot.staging + lane * lane_capacity_,
-                                                     workers_[lane]->host_lane, used, stream),
-                                   "cuMemcpyHtoDAsync(host lane)");
+                    try {
+                        for (std::size_t lane = 0; lane < workers_.size(); ++lane) {
+                            const std::uint64_t used = workers_[lane]->host_used;
+                            if (!used) continue;
+                            check_cuda(cuMemcpyHtoDAsync(slot.staging + lane * lane_capacity_,
+                                                         workers_[lane]->host_lane, used, stream),
+                                       "cuMemcpyHtoDAsync(host lane)");
+                        }
+                        check_cuda(cuEventRecord(host_copy_done_, stream), "cuEventRecord(host_copy_done)");
+                        host_copy_recorded_ = true;
+                    } catch (...) {
+                        // A later enqueue can fail after earlier copies were submitted.
+                        // They must finish before the lanes can be refilled or freed.
+                        cuStreamSynchronize(stream);
+                        throw;
                     }
-                    check_cuda(cuEventRecord(host_copy_done_, stream), "cuEventRecord(host_copy_done)");
-                    host_copy_recorded_ = true;
                 }
             } else if (mode == "async") {
                 if (!measure_gpu) {
@@ -714,15 +721,14 @@ public:
     void close() {
         std::lock_guard<std::mutex> close_lock(close_mutex_);
         if (closed_) return;
+        // Exclude new reads until all worker buffers have been freed.
+        std::lock_guard<std::mutex> binding_lock(output_binding_mutex_);
+        ContextGuard guard(context_);
         if (host_read_) {
             // Workers free their host lanes when they stop; no queued copy may still read them.
-            std::lock_guard<std::mutex> binding_lock(output_binding_mutex_);
-            ContextGuard guard(context_);
             if (host_copy_recorded_) cuEventSynchronize(host_copy_done_);
         }
         stop_workers();
-        std::lock_guard<std::mutex> binding_lock(output_binding_mutex_);
-        ContextGuard guard(context_);
         for (auto& owned_slot : slots_) {
             Slot& slot = *owned_slot;
             std::lock_guard<std::mutex> lock(slot.mutex);
