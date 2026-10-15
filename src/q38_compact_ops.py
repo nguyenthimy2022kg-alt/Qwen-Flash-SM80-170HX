@@ -5,6 +5,29 @@ Called only inside the guarded target-sampling path.
 import torch
 CAP=128
 
+def pack_greedy(x, offset):
+    """Keep the first maximum on each contiguous vocabulary shard."""
+    values, indices = x.max(dim=-1)
+    return torch.stack((values.float(), (indices + offset).float()), dim=-1)
+
+def greedy_filter(gathered, vocab, dtype):
+    """Reconstruct argmax-only logits for unmodified greedy verification.
+
+    This is not a probability distribution for stochastic sampling/logprobs.
+    Both ranks reject NaN scores on the device without a host round trip.
+    Infinite scores and fully masked shards preserve greedy tie semantics.
+    FP32 represents vocabulary indices exactly; ties choose the smallest ID.
+    """
+    pairs = gathered.reshape(gathered.shape[0], -1, 2)
+    values, ids = pairs[..., 0], pairs[..., 1].long()
+    torch._assert_async(~torch.isnan(values).any(),
+                        'NaN target logits in compact greedy verification')
+    maximum = values.max(dim=-1, keepdim=True).values
+    winner = torch.where(values == maximum, ids, vocab).min(dim=-1).values
+    output = torch.full((gathered.shape[0], vocab), -float('inf'),
+                        device=gathered.device, dtype=dtype)
+    return output.scatter_(1, winner[:, None], 0.0)
+
 def pack(x, offset=0):
     v, i=x.topk(CAP+1,dim=-1,sorted=True)
     # FP32 exactly represents vocabulary indices in this model (<2**24).

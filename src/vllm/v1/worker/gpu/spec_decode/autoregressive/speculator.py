@@ -311,14 +311,6 @@ class AutoRegressiveSpeculator(DraftModelSpeculator):
             )
         self.on_prefill_end(num_reqs)
 
-        # Every round first refreshes draft KV from target-verified history.
-        # A copy proposal can then bypass the remaining autoregressive steps.
-        candidate = getattr(self, "hybrid_candidate", None)
-        if candidate is not None and not dummy_run and not is_profile:
-            self.draft_tokens[:num_reqs].fill_(-1)
-            self.draft_tokens[0, :candidate.numel()].copy_(candidate)
-            return self.draft_tokens[:num_reqs]
-
         if self.num_speculative_steps == 1:
             # Early exit.
             return self.draft_tokens[:num_reqs, :1]
@@ -362,7 +354,6 @@ class AutoRegressiveSpeculator(DraftModelSpeculator):
         )
         self.on_multi_step_decode_end(num_reqs)
 
-        self.draft_tokens[:num_reqs, 6:].fill_(-1)
         return self.draft_tokens[:num_reqs]
 
     @torch.inference_mode()

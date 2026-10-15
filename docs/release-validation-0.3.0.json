@@ -1,0 +1,182 @@
+{
+  "version": "0.3.0",
+  "publication_date": "2026-10-14",
+  "benchmark_date": "2026-10-11",
+  "timezone": "America/Los_Angeles",
+  "hardware": "2 x CMP 170HX (SM80)",
+  "model": {
+    "repo_id": "nvidia/Qwen3.8-Flash-Next-NVFP4",
+    "revision": "fc694b54fb0174e0913e6adf86691ef85a4ead47",
+    "metadata_sha256": {
+      "config.json": "deef67a61f3311faf051b23dc4192f442c7fee4f9cd2f38cbcbe4da55c763a80",
+      "model.safetensors.index.json": "660414e8300728ba80062e6a3c81cb76a65e2ab136ac9e9ceb450ba0c51c3c0d"
+    },
+    "indexed_safetensors_files": 11,
+    "indexed_safetensors_bytes": 132680249378,
+    "ple_rows": 320001536,
+    "ple_columns": 160,
+    "ple_dtype": "F8_E4M3",
+    "mtp_tensors": 3101,
+    "mtp_dtype_counts": {
+      "BF16": 1565,
+      "F8_E4M3": 1536
+    }
+  },
+  "config": {
+    "concurrency": 10,
+    "parallelism": "TEP2",
+    "mtp": 6,
+    "thinking": false,
+    "temperature": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "prompt": "写个网站网页",
+    "max_tokens": 5000,
+    "ignore_eos": true
+  },
+  "benchmark": {
+    "before": {
+      "per_request_mean_tok_s": 63.42620493694555,
+      "per_request_min_tok_s": 62.49604410118331,
+      "per_request_max_tok_s": 64.86813092266101,
+      "aggregate_output_tok_s": 623.407593739957,
+      "total_completion_tokens": 50000
+    },
+    "vocabulary_transport": {
+      "per_request_mean_tok_s": 71.53561355618268,
+      "per_request_min_tok_s": 70.09817839521983,
+      "per_request_max_tok_s": 73.21248772720973,
+      "aggregate_output_tok_s": 700.9817839521984,
+      "total_completion_tokens": 50000
+    },
+    "release": {
+      "per_request_mean_tok_s": 76.28891783883023,
+      "per_request_min_tok_s": 75.1937167069427,
+      "per_request_max_tok_s": 78.30358052707392,
+      "aggregate_output_tok_s": 749.6704860037705,
+      "total_completion_tokens": 50000
+    }
+  },
+  "stages_ms": {
+    "phases-rank0": {
+      "input": {
+        "n": 97,
+        "mean": 1.1762893163051802,
+        "p50": 1.158560037612915
+      },
+      "ple_submit": {
+        "n": 97,
+        "mean": 0.6097837539063287,
+        "p50": 0.5802879333496094
+      },
+      "target": {
+        "n": 97,
+        "mean": 58.89973690091949,
+        "p50": 59.08611249923706
+      },
+      "logits": {
+        "n": 97,
+        "mean": 1.6526392513943702,
+        "p50": 1.6558418273925781
+      },
+      "draft": {
+        "n": 97,
+        "mean": 8.415133053494483,
+        "p50": 8.4202880859375
+      },
+      "cycle": {
+        "n": 97,
+        "mean": 72.34280765179506,
+        "p50": 72.5401611328125
+      }
+    },
+    "phases-rank1": {
+      "input": {
+        "n": 97,
+        "mean": 1.165884368198434,
+        "p50": 1.1443519592285156
+      },
+      "ple_submit": {
+        "n": 97,
+        "mean": 0.15218045662358864,
+        "p50": 0.15148794651031494
+      },
+      "target": {
+        "n": 97,
+        "mean": 59.41761928489528,
+        "p50": 59.62095868587494
+      },
+      "logits": {
+        "n": 97,
+        "mean": 1.5991035933347093,
+        "p50": 1.5991363525390625
+      },
+      "draft": {
+        "n": 97,
+        "mean": 8.576345778003182,
+        "p50": 8.58182144165039
+      },
+      "cycle": {
+        "n": 97,
+        "mean": 72.34296267794579,
+        "p50": 72.53942108154297
+      }
+    }
+  },
+  "acceptance": {
+    "recorded": 53,
+    "successful_complete": 50,
+    "intentional_cancellations": 2,
+    "text_harness_tool_call_mismatch": 1,
+    "exact_checks": 13,
+    "remaining_suite_status": "PASS",
+    "shrinking_active_counts": [
+      0.0,
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0,
+      9.0,
+      10.0
+    ],
+    "cache_preemptions": 0,
+    "final_container_state": {
+      "Status": "exited",
+      "Running": false,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 0,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-10-12T05:51:41.940577159Z",
+      "FinishedAt": "2026-10-12T05:57:45.260559613Z"
+    },
+    "scope": "Short text/lifecycle checks; not full context, multimodal, or long-term concurrency certification"
+  },
+  "runtime_image_id": "sha256:f2ab9f592434fa27b04f78cdd8a7daaa42f873cf993a1be507425f3cbaae5f87",
+  "runtime_files_verified_prepublication": 595,
+  "publication_gpu_access": false,
+  "comparison": "Single screening run per setting. Vocabulary comparison in one model load; PCIe versus preceding saved run. Both carry phase instrumentation.",
+  "excluded_candidates": [
+    "Additional 9/10-request draft decode graphs",
+    "Unfinished MoE kernel screening"
+  ],
+  "publication_checks": {
+    "cpu_tests": 48,
+    "runtime": {
+      "installed_runtime_files": 595,
+      "installed_mismatches": [],
+      "source_mismatches": [],
+      "unexpected_modules": [],
+      "gpu_devices_visible": []
+    },
+    "model_loaded": false,
+    "gpu_tests_run": false
+  }
+}

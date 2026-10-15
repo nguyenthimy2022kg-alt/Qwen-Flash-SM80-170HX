@@ -53,7 +53,7 @@
   "-cc.inductor_compile_config={\"combo_kernels\":false,\"benchmark_combo_kernel\":false}",
   "--no-enable-flashinfer-autotune",
   "--speculative-config",
-  "{\"method\": \"mtp\", \"num_speculative_tokens\": 32, \"use_local_argmax_reduction\": true, \"draft_sample_method\": \"greedy\", \"rejection_sample_method\": \"standard\"}",
+  "{\"method\": \"mtp\", \"num_speculative_tokens\": 6, \"use_local_argmax_reduction\": true, \"draft_sample_method\": \"greedy\", \"rejection_sample_method\": \"standard\"}",
   "--enable-expert-parallel",
   "--limit-mm-per-prompt",
   "{\"image\":128,\"video\":0}",

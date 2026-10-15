@@ -1,8 +1,9 @@
 # Deployment
 
+
 [简体中文](从零部署.md) | **English** · [Home](../README.en.md)
 
-v0.2.0 uses the pinned NVIDIA checkpoint. Run the commands on the Linux server, from the repository root after cloning. The repository contains no model weights or prebuilt image.
+v0.3.0 uses the pinned NVIDIA checkpoint. Run the commands on the Linux server, from the repository root after cloning. The repository contains no model weights or prebuilt image.
 
 ## Environment and capacity
 
@@ -67,7 +68,7 @@ Use the **original checkpoint index**, not the loading view, for conversion. Con
 ## 4. Build and configure
 
 ```bash
-docker build -t qwen-flash-sm80:0.2.0 .
+docker build -t qwen-flash-sm80:0.3.0 .
 cp -n config/example.json config/local.json
 python3 - <<'PYCONFIG'
 import json
@@ -75,8 +76,9 @@ from pathlib import Path
 p = Path('config/local.json')
 c = json.loads(p.read_text())
 root = Path.home() / 'qwen-flash-data'
-c.update(image='qwen-flash-sm80:0.2.0', models_root=str(root / 'models'),
-         model_subdir='NVIDIA-Qwen3.8-Flash-Next-GDS', ple_artifact=str(root / 'ple-gds'))
+c.update(image='qwen-flash-sm80:0.3.0', models_root=str(root / 'models'),
+         model_subdir='NVIDIA-Qwen3.8-Flash-Next-GDS', ple_artifact=str(root / 'ple-gds'),
+         max_num_seqs=10, gpu_memory_utilization=0.93)
 p.write_text(json.dumps(c, indent=2) + '\n')
 PYCONFIG
 ```
@@ -108,7 +110,7 @@ curl --no-buffer --fail-with-body http://127.0.0.1:18420/v1/chat/completions \
 
 Default: thinking enabled, `preserve_thinking=true`, `reasoning_effort=xhigh`; temperature 1, top-p 0.95, top-k 20. For timing tests send `"temperature":0` and `"chat_template_kwargs":{"enable_thinking":false}`. Tool calling uses `qwen3_coder`; send `tools` and `tool_choice` in requests. The client must return tool results and any reasoning history it needs preserved.
 
-One request runs at a time. The combined context limit is 262,144 tokens; output is limited by both `max_tokens` and remaining context. Images: up to 128 configured, subject to actual context/VRAM; video is disabled. Prefix matching uses 36-token units while physical blocks remain 3,456 tokens. Do not enable async scheduling or increase active request slots with this release.
+The example permits 10 active requests. Set `max_num_seqs` to 1–10; existing configurations that omit it keep one request. The tested VRAM budget is `gpu_memory_utilization=0.93`. The combined context limit is 262,144 tokens per request; output is limited by both `max_tokens` and remaining context. Images: up to 128 configured, subject to actual context/VRAM; video is disabled. Prefix matching uses 36-token units while physical blocks remain 3,456 tokens. Requests share the VRAM cache; keep synchronous scheduling.
 
 The service binds to localhost without authentication. For remote access, run SSH forwarding on the client machine: `ssh -N -L 18420:127.0.0.1:18420 user@server`.
 
@@ -128,13 +130,13 @@ python3 scripts/serve.py stop --name "<container>"
 
 ## Upgrading an existing deployment
 
-Stop the old model before loading another. v0.2.0 changes the supported checkpoint to NVIDIA: **a v0.1.7 RadixArk deployment must complete steps 1–3** and update the model/PLE/identity paths. Keep its old image and configuration for rollback. Already prepared, verified NVIDIA data can be reused.
+Stop the old model before loading another. v0.3.0 continues to use the NVIDIA checkpoint: **a v0.1.7 RadixArk deployment must complete steps 1–3** and update the model/PLE/identity paths. Keep its old image and configuration for rollback. Already prepared, verified NVIDIA data can be reused.
 
 ```bash
 git pull --ff-only
-docker build -t qwen-flash-sm80:0.2.0 .
+docker build -t qwen-flash-sm80:0.3.0 .
 # Update config/local.json paths and image before starting.
 python3 scripts/serve.py start --config config/local.json
 ```
 
-Set `image` to `qwen-flash-sm80:0.2.0` and keep `draft_int8=true`. The old standalone `draft_int8=false` toggle does not apply to the new probability/history drafting path and is rejected early. Other startup parameters are stored in `config/vllm-args.json`; keep the documented single-request/synchronous constraints. [Validation scope](RELEASE_VALIDATION.en.md).
+Set `image` to `qwen-flash-sm80:0.3.0`, keep `draft_int8=true`, and set `max_num_seqs=10`, `gpu_memory_utilization=0.93`. Existing v0.2.0 NVIDIA model and PLE data can be reused. This release uses fixed MTP6 and removes history-copy drafting. Keep synchronous scheduling; other startup parameters are in `config/vllm-args.json`. [Test records](MULTI_REQUEST.en.md).

@@ -21,6 +21,9 @@ def read_config(path):
     if type(c.get('port')) is not int or not 1024<=c['port']<=65535:
         raise ValueError('port 必须为 1024～65535 之间的整数')
     if c.get('mode') not in ('tep2','tp2'):raise ValueError('mode 仅支持 tep2 / tp2')
+    if type(c.get('max_num_seqs',1)) is not int or not 1<=c.get('max_num_seqs',1)<=10:
+        raise ValueError('max_num_seqs 必须为 1～10 的整数；当前 MTP6 使用同步调度')
+    gpu_memory_utilization(c)
     gpu_ids=c.get('gpu_ids')
     if not isinstance(gpu_ids,list) or len(gpu_ids)!=2 or any(
             not ((type(gpu) is int and gpu>=0) or (isinstance(gpu,str) and gpu.strip())) for gpu in gpu_ids):
@@ -34,7 +37,7 @@ def read_config(path):
     if c['container_memory_gib']>c['container_memory_and_swap_gib']:
         raise ValueError('container_memory_and_swap_gib 不能小于 container_memory_gib')
     if not isinstance(c.get('draft_int8'),bool):raise ValueError('draft_int8 必须为布尔值')
-    if not c['draft_int8']:raise ValueError('v0.2.0 的混合草稿路径要求 draft_int8=true；旧配置请按升级说明迁移')
+    if not c['draft_int8']:raise ValueError('MTP6 草稿要求 draft_int8=true；旧配置请按升级说明迁移')
     guard=c.get('core_offset_guard')
     if guard is not None and (not isinstance(guard,dict) or
             not isinstance(guard.get('gpu_uuid'),str) or not guard['gpu_uuid'].strip() or
@@ -90,8 +93,14 @@ def gpu_inventory():
         result[index]=result[uuid]={'uuid':uuid,'bdf':bdf}
     return result
 
+def gpu_memory_utilization(c):
+    value=c.get('gpu_memory_utilization')
+    if value is not None and (type(value) not in (int,float) or not math.isfinite(value) or not 0<value<=1):
+        raise ValueError('gpu_memory_utilization 必须为大于 0、不超过 1 的有限数值')
+    return value
+
 def build_command(c,name,run,devices):
-    if not c['draft_int8']:raise ValueError('混合草稿要求 draft_int8=true')
+    if not c['draft_int8']:raise ValueError('MTP6 草稿要求 draft_int8=true')
     for gpu in c['gpu_ids']:
         if str(gpu) not in devices:raise ValueError(f'未找到所选 GPU：{gpu}，请填写本机显卡编号或完整 UUID')
     selected=[devices[str(x)] for x in c['gpu_ids']]
@@ -110,8 +119,19 @@ def build_command(c,name,run,devices):
     for k,v in env.items():cmd+=['-e',k+'='+v]
     args=json.loads((ROOT/'config/vllm-args.json').read_text())
     args=[x.replace('{MODEL}',model) for x in args]
+    max_num_seqs=c.get('max_num_seqs',1)
+    if type(max_num_seqs) is not int or not 1<=max_num_seqs<=10:
+        raise ValueError('max_num_seqs 必须为 1～10 的整数')
+    args[args.index('--max-num-seqs')+1]=str(max_num_seqs)
+    memory_fraction=gpu_memory_utilization(c)
+    if memory_fraction is not None:
+        args[args.index('--gpu-memory-utilization')+1]=str(memory_fraction)
     if c['mode']=='tp2':args.remove('--enable-expert-parallel')
-    idx=args.index('--speculative-config')+1;spec=json.loads(args[idx]);spec['use_local_argmax_reduction']=c['draft_int8'];args[idx]=json.dumps(spec)
+    idx=args.index('--speculative-config')+1;spec=json.loads(args[idx])
+    spec['use_local_argmax_reduction']=c['draft_int8']
+    # MTP6 uses six candidates for every request; history copying was removed.
+    spec['num_speculative_tokens']=6
+    args[idx]=json.dumps(spec)
     return cmd+[c['image'],'vllm','serve']+args
 
 def check_offset(guard):

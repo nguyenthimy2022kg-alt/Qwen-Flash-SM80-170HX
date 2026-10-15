@@ -1,5 +1,5 @@
 {
-  "image": "qwen-flash-sm80:0.2.0",
+  "image": "qwen-flash-sm80:0.3.0",
   "models_root": "/data/models",
   "model_subdir": "NVIDIA-Qwen3.8-Flash-Next-GDS",
   "ple_artifact": "/data/ple-gds",
@@ -16,5 +16,7 @@
   "min_host_available_gib": 2,
   "core_offset_guard": null,
   "validation_dir": null,
-  "ple_identity": "config/local-ple-identity.json"
+  "ple_identity": "config/local-ple-identity.json",
+  "max_num_seqs": 10,
+  "gpu_memory_utilization": 0.93
 }

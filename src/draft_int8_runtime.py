@@ -34,7 +34,7 @@ def install():
     original=DraftModelSpeculator._validate_local_argmax_reduction
     def validate(self):
         assert self.use_local_argmax_reduction
-        assert self.speculative_config.num_speculative_tokens==32  # capacity; MTP loop still generates 6
+        assert self.speculative_config.num_speculative_tokens == 6
         assert self.speculative_config.draft_sample_method!='probabilistic'
         assert get_tensor_model_parallel_world_size()==2
         model=self.model;head=model.lm_head;weight=head.weight;rank=get_tensor_model_parallel_rank()

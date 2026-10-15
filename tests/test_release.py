@@ -18,9 +18,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('Q38_PLE_HOST_READ=0',cmd)
         self.assertEqual(cmd[cmd.index('--tensor-parallel-size')+1],'2')
         self.assertEqual(cmd[cmd.index('--pipeline-parallel-size')+1],'1')
-        self.assertEqual(json.loads(cmd[cmd.index('--speculative-config')+1])['num_speculative_tokens'],32)
+        self.assertEqual(json.loads(cmd[cmd.index('--speculative-config')+1])['num_speculative_tokens'],6)
         self.assertEqual(cmd[cmd.index('--prefix-match-unit')+1],'36')
-        self.assertEqual(cmd[cmd.index('--max-num-seqs')+1],'1')
+        self.assertEqual(cmd[cmd.index('--max-num-seqs')+1],'10')
         self.assertIn('--no-async-scheduling',cmd)
         self.assertFalse(any('/hybrid' in x or '/bench' in x for x in cmd))
         self.assertNotIn('Q38_DRAFT_VALIDATION_DIR=/validation',cmd)
@@ -28,6 +28,25 @@ class ReleaseTests(unittest.TestCase):
         c=self.config();c.update(draft_int8=False)
         with self.assertRaisesRegex(ValueError,'draft_int8'):
             serve.build_command(c,'test',Path('/tmp/run'),self.devices())
+    def test_concurrent_profile_preserves_mtp6_and_sync_ordering(self):
+        c=self.config();c.update(max_num_seqs=10,gpu_memory_utilization=.88)
+        cmd=serve.build_command(c,'test',Path('/tmp/run'),self.devices())
+        self.assertEqual(cmd[cmd.index('--max-num-seqs')+1],'10')
+        self.assertIn('--no-async-scheduling',cmd)
+        self.assertEqual(cmd[cmd.index('--gpu-memory-utilization')+1],'0.88')
+        self.assertEqual(json.loads(cmd[cmd.index('--speculative-config')+1])['num_speculative_tokens'],6)
+        legacy=dict(c);legacy.pop('max_num_seqs');legacy.pop('gpu_memory_utilization')
+        legacy_cmd=serve.build_command(legacy,'test',Path('/tmp/run'),self.devices())
+        self.assertEqual(legacy_cmd[legacy_cmd.index('--max-num-seqs')+1],'1')
+        for invalid in (0,11,True,'10'):
+            c['max_num_seqs']=invalid
+            with self.assertRaisesRegex(ValueError,'max_num_seqs'):
+                serve.build_command(c,'test',Path('/tmp/run'),self.devices())
+        c['max_num_seqs']=8
+        for invalid in (0,1.01,float('nan'),float('inf'),True,'0.88'):
+            c['gpu_memory_utilization']=invalid
+            with self.assertRaisesRegex(ValueError,'gpu_memory_utilization'):
+                serve.build_command(c,'test',Path('/tmp/run'),self.devices())
     def test_alias_cannot_select_same_gpu_twice(self):
         c=self.config();c['gpu_ids']=['0','GPU-test-a'];d=self.devices();d['GPU-test-a']=d['0']
         with self.assertRaises(ValueError):serve.build_command(c,'test',Path('/tmp/run'),d)

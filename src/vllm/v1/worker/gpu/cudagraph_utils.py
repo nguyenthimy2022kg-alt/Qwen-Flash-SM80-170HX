@@ -216,9 +216,6 @@ class CudaGraphManager:
         else:
             decode_query_lens = [self.decode_query_len]
 
-        if self.decode_query_len == 33 and self.max_num_reqs == 1:
-            decode_query_lens = [7, 17, 33]
-
         capture_varlen_decode = (
             separate_decode_routine and bool(decode_mode) and self.varlen_decode
         )
@@ -303,7 +300,7 @@ class CudaGraphManager:
             descs.sort(key=lambda d: d.num_tokens, reverse=True)
             self._capture_descs[mode] = descs
 
-        if self.decode_query_len == 33 and self.max_num_reqs == 1:
+        if self.decode_query_len == 33:
             pw = descs_by_mode.get(CUDAGraphMode.PIECEWISE, [])
             for (count, loras), candidates in self._candidates.items():
                 fallback = [d for d in pw if d.num_tokens >= count and d.num_active_loras == loras]
@@ -413,11 +410,6 @@ class CudaGraphManager:
                     effective_loras,
                     max_query_len,
                 ):
-                    seen = getattr(self, "_hybrid_seen_descs", set())
-                    if desc not in seen:
-                        seen.add(desc)
-                        self._hybrid_seen_descs = seen
-                        logger.info("Hybrid graph dispatch: manager=%s query_capacity=%s desc=%s", type(self).__name__, self.decode_query_len, desc)
                     return desc
         return BatchExecutionDescriptor(
             cg_mode=CUDAGraphMode.NONE,

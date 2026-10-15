@@ -22,8 +22,7 @@ class DraftTokensHandler:
     def set_draft_tokens(
         self, input_batch: InputBatch, draft_tokens: torch.Tensor
     ) -> None:
-        draft_tokens = draft_tokens[:, :getattr(self, "hybrid_length", draft_tokens.shape[1])]
-        self.req_ids = input_batch.req_ids
+        self.req_ids = list(input_batch.req_ids)
         self.num_draft_tokens = draft_tokens.shape[1]
         if not input_batch.has_structured_output_reqs:
             # No draft token validation needs to be performed by

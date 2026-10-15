@@ -6,18 +6,13 @@
 
 Uses **GDS direct SSD reads**, **TEP2 tensor and expert parallelism**, **MTP6 speculative decoding**, and specialized kernels to run the NVFP4 main model on two CMP 170HX GPUs. The approximately 51.2 GB PLE lookup table stays on SSD, with rows read into VRAM as needed.
 
-**Historical benchmark (September 8, RadixArk checkpoint):** completed single-request long-output tests with **8K–128K input: 151.05–168.29 tok/s decode throughput**, all ending naturally. A separate short-prompt run before packaging recorded **170.826 tok/s**. The task instruction was **“写个网站网页”** (“Build a web page”) in all cases. **With shorter reasoning, output speed can reach approximately 200 tok/s.**
+**v0.3.0 supports 1–10 concurrent requests; the example configuration defaults to 10.** It uses the NVIDIA NVFP4 checkpoint and fixed MTP6, with per-request draft isolation, compact vocabulary transport, and expanded PCIe communication. History-copy drafting has been removed.
 
-Validated hardware: **two CMP 170HX GPUs (SM80, approximately 63.39 GiB available VRAM each)**. The model and software versions are pinned; other SM80 devices and models have not been validated. Working GPU P2P and NVMe GDS are prerequisites; the container does not configure host drivers.
+**Measured on two CMP 170HX GPUs: 749.67 tok/s aggregate at 10 concurrent requests, averaging 76.29 tok/s per request.**
 
-[Deployment guide](docs/DEPLOYMENT.en.md) · [Hardware and connectivity](docs/REFERENCE_HARDWARE.en.md) · [API connection](#api-connection) · [Integrated optimizations](#integrated-optimizations)
+[Deployment](docs/DEPLOYMENT.en.md) · [10-request benchmark](#10-request-benchmark) · [API connection](#api-connection) · [Release validation](docs/MULTI_REQUEST.en.md)
 
-**v0.2.0:** the current runtime uses the **NVIDIA NVFP4 checkpoint**, with MTP6 + verified history drafts, lower host memory use, finer prefix matching, and small-message PCIe communication. Follow the [migration instructions](docs/DEPLOYMENT.en.md#upgrading-an-existing-deployment); old model data must not be mixed with the NVIDIA checkpoint. [Release validation](docs/RELEASE_VALIDATION.en.md).
-
-
-Publication regression: **28 functional/context requests + 20 continuous conversation turns** passed, including approximately 260K input with follow-ups. This is bounded validation; see the report above.
-
-**New on main (after v0.2.0)**: optional [PLE reads through host memory](docs/PLE_HOST_READ.en.md) for investigating direct-read failures on other hosts. Disabled by default and requires a rebuild; works with the existing SSD, while the optional RAM disk needs ample host memory.
+Validated hardware: two CMP 170HX GPUs (SM80, approximately 64 GiB VRAM each). GPU P2P and NVMe GDS are host prerequisites. Existing NVIDIA model and matching PLE data can be reused; rebuild the image to upgrade.
 
 ## Project highlights
 
@@ -25,9 +20,26 @@ Publication regression: **28 functional/context requests + 20 continuous convers
 - **Avoids approximately 47.68 GiB of full-table VRAM storage:** the **51.2 GB** FP8 PLE table stays on SSD, without keeping the entire table resident in VRAM or host RAM. GPUs retain the required data and working buffers. This figure is for one complete table, not a per-GPU saving.
 - **From approximately 38 to 170.826 tok/s:** **4.50× the initial deployment's throughput, or roughly a 350% increase**. Code-heavy outputs have approached **200 tok/s**. These are results from different stages of the project, not a controlled comparison against stock vLLM.
 
+## 10-request benchmark
+
+**October 11, 2026: NVIDIA NVFP4, two CMP 170HX GPUs, TEP2 + MTP6.** Prompt: “写个网站网页” (“Build a web page”). Thinking disabled; `temperature=1`, `top_p=0.95`, `top_k=20`. Each of 10 requests generates 5,000 tokens.
+
+| Metric | Result |
+|---|---:|
+| Aggregate output throughput | **749.67 tok/s** |
+| Mean output speed per request | **76.29 tok/s** |
+| Per-request range | 75.19–78.30 tok/s |
+| Total output | 50,000 tokens |
+| Generation cycle | 72.34 ms |
+
+Output speed is measured from the first to the last nonempty streamed output, excluding time to first token. Aggregate throughput increased from **623.41 to 749.67 tok/s**, approximately **20.3%**, over this optimization series. [Changes and test records](docs/MULTI_REQUEST.en.md)
+
+<details>
+<summary>Historical single-request results: 8K–128K input and code output near 200 tok/s</summary>
+
 ## Historical 8K–128K benchmark
 
-Task prompt: **“写个网站网页”** (“Build a web page”), preceded by web-design reference text to reach each input length. **Thinking enabled, using the template's default `xhigh` (highest supported level), without a separate thinking budget.** TEP2 + MTP6; output limit: 50,000 tokens. One run per length, all ending naturally. Both reasoning and answer tokens count toward output.
+Historical results from September 8, 2026, using the RadixArk checkpoint. Task prompt: **“写个网站网页”** (“Build a web page”), preceded by web-design reference text to reach each input length. **Thinking enabled, using the template's default `xhigh` (highest supported level), without a separate thinking budget.** TEP2 + MTP6; output limit: 50,000 tokens. One run per length, all ending naturally. Both reasoning and answer tokens count toward output.
 
 | Input length | Prefill throughput* (tok/s) | Decode throughput (tok/s) |
 |---|---:|---:|
@@ -46,6 +58,8 @@ Task prompt: **“写个网站网页”** (“Build a web page”), preceded by 
 **By some people's misleading testing standards, it can reach 260 tokens/s.**
 
 ![Sequential-number output test: client reports 259 tokens/s and 240 ms time to first token](docs/images/sequential-numbers-259-tok-s.png)
+
+</details>
 
 ## Quick start
 
@@ -70,18 +84,16 @@ Use the base URL or full endpoint as required by the client. The default service
 |---|---|
 | SSD → GPU | GDS/cuFile PLE reads, C++ planning, 32 persistent readers, 3 reusable staging slots and ordered asynchronous handoff |
 | Parallel execution | TEP2 (tensor parallelism + expert parallelism), Marlin and GPU P2P |
-| Draft generation | MTP6 for new text; verified history matches propose 16 or 32 tokens. The configured capacity of 32 does **not** mean MTP32. |
+| Draft generation | Fixed MTP6 with independent draft probabilities for each request and target-model verification |
 | Draft scoring | Full-vocabulary INT8 screening, BF16 candidate reranking and an 8-candidate probability distribution used consistently by drafting and verification |
-| Target scoring | Compact candidate communication with full-vocabulary fallbacks when required |
+| Target scoring | Best-token transport at temperature 0; candidate and tie transport at temperature 1 with top-k 20; full-vocabulary paths for other settings |
 | Small compute shapes | HC GEMV, TileLang single-row projections, fused seven-row HC/GDN computation and CUDA Graph replay |
-| Communication | FlashInfer PCIe IPC AllReduce for eligible BF16 `[1/7/33, 2560]` tensors; existing paths for other shapes |
+| Communication | FlashInfer PCIe IPC AllReduce covering draft and target-verification shapes for 1–10 requests |
 | Multi-turn cache | Prefix matching in 36-token units; physical cache blocks remain 3,456 tokens |
 | Host memory | Selective CUDA loading, targeted kernel preloading, streaming checkpoint preparation and memory limits |
 | Stability | PLE handoff synchronization, context-boundary completion fixes and prewarmed sampling fallbacks |
 
-The supported configuration is **two SM80 GPUs, one active request, synchronous scheduling**. Maximum combined context is 262,144 tokens; the configured output limit is also 262,144 and remains constrained by available context. Image input is configurable up to 128 images, but this is a limit rather than a claim that every 128-image request fits. Thinking, preserved reasoning history and tool parsing remain enabled by default.
-
-Local measurements before packaging found approximately **1.51–1.91 ms less latency per MTP6 verification cycle** from the communication change. Acceptance rate and output content affect tokens/s; this is not a universal throughput gain. The historical table above is not a benchmark of the NVIDIA checkpoint or v0.2.0.
+The configuration supports **two SM80 GPUs, 1–10 active requests, synchronous scheduling**, with 10 requests in the example configuration. Requests share the VRAM cache; 262K is the context limit per request. Maximum combined context is 262,144 tokens; the configured output limit is also 262,144 and remains constrained by available context. Image input is configurable up to 128 images, but this is a limit rather than a claim that every 128-image request fits. Thinking, preserved reasoning history and tool parsing remain enabled by default.
 
 ## Repository layout
 

@@ -6,10 +6,14 @@ Only graph-capture boundaries may rebind its stream, after device synchronizatio
 No output buffers are shared between calls.
 """
 from contextlib import contextmanager
-import importlib.util
 import torch
 import torch.distributed as dist
 from flashinfer.comm.cuda_ipc import create_shared_buffer, free_shared_buffer
+
+# Locally checked MTP6 draft/verification batches for 1..10 requests,
+# plus the previously supported 33-row path. Other shapes use vLLM.
+_SCREENED_ROWS = frozenset(range(1, 11)) | frozenset((14, 21, 28, 33, 35, 42, 49, 56, 63, 70))
+_MAX_ROWS = max(_SCREENED_ROWS)
 
 class PcieIpcComm:
     def __init__(self, group, device):
@@ -23,10 +27,10 @@ class PcieIpcComm:
         assert not getattr(config.scheduler_config, 'async_scheduling', False), 'PCIe IPC requires synchronous scheduling'
         from q38_pcie_kernel import module as kernel
         self.module = kernel.load()
-        self.bytes = self.module.pcie_ipc_workspace_size(2, 33 * 2560, 2, 32)
+        self.bytes = self.module.pcie_ipc_workspace_size(2, _MAX_ROWS * 2560, 2, 32)
         with torch.cuda.device(self.device):
             self.ptrs = create_shared_buffer(self.bytes, group=group)
-            self.handle = self.module.pcie_ipc_init(self.ptrs, self.rank, 33 * 2560, 2, 32)
+            self.handle = self.module.pcie_ipc_init(self.ptrs, self.rank, _MAX_ROWS * 2560, 2, 32)
             self.module.pcie_ipc_set_memop_enabled(self.handle, False)
             torch.cuda.synchronize(self.device)
         dist.barrier(group=group)
@@ -36,7 +40,7 @@ class PcieIpcComm:
     def supports(self, x):
         return (self.handle is not None and x.is_cuda and x.device == self.device
                 and x.dtype == torch.bfloat16 and x.ndim == 2
-                and x.shape[1] == 2560 and x.shape[0] in (1,7,33)
+                and x.shape[1] == 2560 and x.shape[0] in _SCREENED_ROWS
                 and x.is_contiguous() and x.data_ptr() % 16 == 0)
 
     def all_reduce(self, x):

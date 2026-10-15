@@ -1,5 +1,7 @@
 # v0.2.0 release validation
 
+See [multi-request validation](MULTI_REQUEST.en.md) for v0.3.0. This page preserves the historical v0.2.0 validation.
+
 [简体中文](发布检查.md) | **English** · [Home](../README.en.md)
 
 The main branch later added optional host-memory reads; see [PR #2 validation](HOST_READ_VALIDATION.md). The table below remains the historical v0.2.0 validation, not full-model validation of the new path.
