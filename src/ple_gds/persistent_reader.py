@@ -202,10 +202,6 @@ class PersistentGdsPleReader:
                         f"{output.numel()} < {self.output_bytes}"
                     )
                 output = output[: self.output_bytes]
-                if output.data_ptr() % 4096:
-                    raise ValueError(
-                        f"external output slot {slot} is not 4096-byte aligned"
-                    )
             self._output_slots.append(output)
             self._free_slots.put_nowait(slot)
 
@@ -492,10 +488,8 @@ class PersistentGdsPleReader:
                         f"replacement output slot {slot} must be contiguous on {self.device}"
                     )
                 output = external.view(torch.uint8).reshape(-1)
-                if not output.numel() or output.data_ptr() % 4096:
-                    raise ValueError(
-                        f"replacement output slot {slot} must be nonempty and 4096-byte aligned"
-                    )
+                if not output.numel():
+                    raise ValueError(f"replacement output slot {slot} must be nonempty")
                 if capacity is None:
                     capacity = int(output.numel())
                 elif output.numel() != capacity:

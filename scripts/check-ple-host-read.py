@@ -27,6 +27,45 @@ def collect(reader, ids, mode, stream):
     return torch.cat(parts)
 
 
+def check_offset_outputs(reader, args, stream):
+    ids = [0, 1, 0, reader.row_count - 1]
+    expected = collect(reader, ids, "sync", stream)
+    capacity = expected.numel()
+
+    def offset_output():
+        owner = torch.empty(capacity + 320, dtype=torch.uint8, device=reader.device)
+        offset = 160 if (owner.data_ptr() + 160) % 4096 else 320
+        return owner[offset:offset + capacity]
+
+    initial = offset_output()
+    with torch.cuda.device(reader.device):
+        offset_reader = PersistentGdsPleReader(
+            args.artifact,
+            expected_gpu_uuid=args.gpu_uuid,
+            expected_gpu_bdf=args.gpu_bdf,
+            slot_count=1,
+            output_bytes=capacity,
+            worker_count=args.workers,
+            external_output_slots=[initial],
+        )
+        try:
+            for label, output in (("initial", initial), ("rebound", offset_output())):
+                if label == "rebound":
+                    offset_reader.rebind_output_slots([output])
+                with torch.cuda.stream(stream):
+                    lease = offset_reader.read(ids, mode="sync_mt", stream=stream)
+                    try:
+                        if lease.tensor.data_ptr() != output.data_ptr():
+                            sys.exit(f"MISMATCH: {label} slot did not use the supplied output")
+                        if not torch.equal(lease.tensor.view(torch.uint8).reshape(-1),
+                                           expected.reshape(-1)):
+                            sys.exit(f"MISMATCH: {label} offset output bytes")
+                    finally:
+                        lease.release(stream)
+        finally:
+            offset_reader.close()
+
+
 def cases(row_count, rng):
     yield "first row", [0]
     yield "last row", [row_count - 1]
@@ -94,10 +133,12 @@ def main():
             if not overlap_ok:
                 sys.exit(f"MISMATCH round {round_index}: back-to-back reads")
             rows += len(first_ids) + len(second_ids)
+        check_offset_outputs(reader, args, stream)
     finally:
         reader.close()
     backend = "host read" if args.host_read else "strict GDS"
     print(f"OK: {args.rounds} rounds, {rows} rows identical between sync (cuFileRead) and sync_mt ({backend})")
+    print("OK: initial and rebound offset output slots match aligned output bytes")
 
 
 if __name__ == "__main__":
