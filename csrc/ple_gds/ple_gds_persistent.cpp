@@ -306,6 +306,10 @@ public:
                 slots_.push_back(std::move(slot));
                 Slot& managed = *slots_.back();
                 verify_pointer(managed.staging, staging_capacity, "staging");
+                // Only the staging buffer is registered with cuFile. Gather writes bytes to output.
+                if (managed.staging & 4095U) {
+                    throw std::runtime_error("staging pointer is not 4096-byte aligned");
+                }
                 verify_pointer(managed.output, output_capacity, "output");
                 for (unsigned int lane = 0; lane < requested_worker_count_; ++lane) {
                     const CUdeviceptr lane_base = managed.staging + lane * lane_capacity_;
@@ -1087,7 +1091,6 @@ private:
         if (pointer < allocation_base || pointer + capacity > allocation_base + allocation_size) {
             throw std::runtime_error(std::string(name) + " capacity exceeds torch allocation");
         }
-        if (pointer & 4095U) throw std::runtime_error(std::string(name) + " pointer is not 4096-byte aligned");
     }
 
     void batch_read(Slot& slot, const std::vector<Range>& ranges, ReadMetrics* metrics) {
